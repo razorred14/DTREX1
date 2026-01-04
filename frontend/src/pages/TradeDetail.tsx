@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { tradeApi, type Trade } from "../api/client";
 import { useAuth } from "../contexts/AuthContext";
 import { useXchPrice, formatXch } from "../hooks/useXchPrice";
+import CommitmentFlow from "../components/CommitmentFlow";
 
 export default function TradeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -219,6 +220,20 @@ export default function TradeDetail() {
                   })}
                 </div>
               </div>
+            )}
+
+            {/* Commitment Fee Section - Show when trade is matched and user is participant */}
+            {isParticipant && trade.status === "matched" && (
+              <CommitmentFlow 
+                tradeId={trade.id}
+                onSuccess={() => {
+                  // Refresh trade data after successful commitment
+                  window.location.reload();
+                }}
+                onError={(error) => {
+                  setError(error);
+                }}
+              />
             )}
 
             {/* Acceptor's Offer - if matched */}

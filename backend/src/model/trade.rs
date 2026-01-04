@@ -353,6 +353,23 @@ impl TradeBmc {
         Ok(())
     }
 
+    /// Cancel a trade as admin (any open trade)
+    pub async fn admin_cancel(mm: &ModelManager, id: i64) -> Result<(), Error> {
+        let result = sqlx::query(
+            "UPDATE trades SET status = 'cancelled', updated_at = NOW() WHERE id = $1 AND status IN ('proposal', 'matched', 'committed')",
+        )
+        .bind(id)
+        .execute(mm.db())
+        .await
+        .map_err(|_| Error::InternalServer)?;
+
+        if result.rows_affected() == 0 {
+            return Err(Error::NotFound);
+        }
+
+        Ok(())
+    }
+
     /// Delete a trade proposal (proposer only, proposal status only)
     pub async fn delete(ctx: &Ctx, mm: &ModelManager, id: i64) -> Result<(), Error> {
         let result = sqlx::query(
@@ -360,6 +377,23 @@ impl TradeBmc {
         )
         .bind(id)
         .bind(ctx.user_id())
+        .execute(mm.db())
+        .await
+        .map_err(|_| Error::InternalServer)?;
+
+        if result.rows_affected() == 0 {
+            return Err(Error::NotFound);
+        }
+
+        Ok(())
+    }
+
+    /// Delete a trade as admin (any proposal or cancelled trade)
+    pub async fn admin_delete(mm: &ModelManager, id: i64) -> Result<(), Error> {
+        let result = sqlx::query(
+            "DELETE FROM trades WHERE id = $1 AND status IN ('proposal', 'cancelled')",
+        )
+        .bind(id)
         .execute(mm.db())
         .await
         .map_err(|_| Error::InternalServer)?;

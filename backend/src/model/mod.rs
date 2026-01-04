@@ -1,11 +1,13 @@
 mod contract;
 mod file;
 mod trade;
+mod transaction;
 mod user;
 
 pub use contract::*;
 pub use file::*;
 pub use trade::*;
+pub use transaction::*;
 pub use user::*;
 
 use crate::store::Db;
@@ -22,6 +24,10 @@ impl ModelManager {
     }
 
     pub fn db(&self) -> &Db {
+        &self.db
+    }
+    
+    pub fn pool(&self) -> &Db {
         &self.db
     }
 }

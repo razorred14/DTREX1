@@ -11,8 +11,18 @@ pub enum Error {
     InternalServer,
     NotFound,
     BadRequest,
-    // Add this for your contract operations
+    // Entity operations
     EntityNotFound { entity: &'static str, id: i64 },
+    // Database errors
+    Database(String),
+    // Authentication errors
+    Auth(String),
+    // Configuration errors
+    Config(String),
+    // Invalid state errors
+    InvalidState(String),
+    // Not found with message
+    NotFoundMsg(String),
 }
 
 // This allows your Error to be returned directly by Axum handlers
@@ -33,6 +43,21 @@ impl IntoResponse for Error {
                     format!("{} with id {} not found", entity, id),
                 )
                     .into_response();
+            }
+            Error::Database(msg) => {
+                return (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", msg)).into_response();
+            }
+            Error::Auth(msg) => {
+                return (StatusCode::UNAUTHORIZED, msg.clone()).into_response();
+            }
+            Error::Config(msg) => {
+                return (StatusCode::INTERNAL_SERVER_ERROR, format!("Configuration error: {}", msg)).into_response();
+            }
+            Error::InvalidState(msg) => {
+                return (StatusCode::BAD_REQUEST, msg.clone()).into_response();
+            }
+            Error::NotFoundMsg(msg) => {
+                return (StatusCode::NOT_FOUND, msg.clone()).into_response();
             }
         };
         (StatusCode::INTERNAL_SERVER_ERROR, error_msg).into_response()

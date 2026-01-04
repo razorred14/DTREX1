@@ -128,6 +128,15 @@ export default function Navbar() {
                   Settings
                 </Link>
 
+                {user?.is_admin && (
+                  <Link
+                    to="/admin"
+                    className="text-amber-600 hover:text-amber-700 font-medium transition-colors"
+                  >
+                    Admin
+                  </Link>
+                )}
+
                 <Link to="/create" className="btn-primary">
                   New Trade
                 </Link>

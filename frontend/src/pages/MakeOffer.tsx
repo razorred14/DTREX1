@@ -135,7 +135,7 @@ export default function MakeOffer() {
         </Link>
         <h1 className="text-2xl font-bold">Make an Offer</h1>
         <p className="text-gray-600 mt-1">
-          Submit your offer for "{trade.item_title}"
+          Submit your offer for "{trade.proposer_item_title}"
         </p>
       </div>
       
@@ -153,8 +153,8 @@ export default function MakeOffer() {
             📦
           </div>
           <div className="flex-1">
-            <h3 className="font-semibold">{trade.item_title}</h3>
-            <p className="text-sm text-gray-600 line-clamp-2">{trade.item_description}</p>
+            <h3 className="font-semibold">{trade.proposer_item_title}</h3>
+            <p className="text-sm text-gray-600 line-clamp-2">{trade.proposer_item_description}</p>
             <div className="mt-2 flex items-baseline gap-2">
               <span className="text-green-600 font-semibold">
                 {formatXch(usdToXch(trade.proposer_item_value_usd || 0, xchRate))} XCH
@@ -167,11 +167,11 @@ export default function MakeOffer() {
         </div>
         
         {/* Show what they want */}
-        {trade.wishlists && trade.wishlists.length > 0 && (
+        {trade.wishlist && trade.wishlist.length > 0 && (
           <div className="mt-4 pt-4 border-t">
             <h4 className="text-sm font-medium text-gray-700 mb-2">They're looking for:</h4>
             <ul className="text-sm text-gray-600 space-y-1">
-              {trade.wishlists.map((item, i) => (
+              {trade.wishlist.map((item: { item_description?: string; xch_amount?: number }, i: number) => (
                 <li key={i} className="flex items-center gap-2">
                   <span className="text-green-500">✓</span>
                   {item.item_description}
@@ -335,7 +335,7 @@ export default function MakeOffer() {
                 }}
                 placeholder="0.01"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                required={offerType !== "item"}
+                required
               />
               {xchAmount && parseFloat(xchAmount) > 0 && (
                 <p className="text-sm text-gray-500 mt-1">

@@ -106,6 +106,9 @@ async fn main() {
     let app = app.merge(rpc_routes).merge(config_routes)
         .layer(CorsLayer::permissive());
 
+    // Start the transaction verification background service
+    api::verify::start_verification_service(mm.clone(), app_state.clone()).await;
+
     // Start server
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
     tracing::info!("Server listening on {}", addr);

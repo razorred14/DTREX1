@@ -105,7 +105,7 @@ export default function Login() {
       {/* Header */}
       <div className="text-center pt-8 pb-4">
         <h1 className="text-4xl font-bold text-gray-900">
-          🔄 <span className="text-green-600">DTREX</span>
+          🔄 <span className="text-green-600">Decntralized Trading Exchange D-TREX</span>
         </h1>
         <p className="mt-2 text-lg text-gray-600">
           Trade anything directly, secured by the Chia Blockchain

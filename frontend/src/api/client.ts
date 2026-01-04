@@ -89,6 +89,9 @@ export interface Trade {
   xch_amount?: number;
   trade_type?: string;
   
+  // Wishlist (what proposer wants)
+  wishlist?: WishlistItem[];
+  
   // Shipping
   proposer_tracking_number?: string;
   proposer_shipped_at?: string;
@@ -142,6 +145,43 @@ export interface TradeReview {
   overall_score: number;
   comment?: string;
   created_at: string;
+}
+
+// Commitment Types
+export interface CommitmentDetails {
+  trade_id: number;
+  exchange_wallet_address: string;
+  commitment_fee_usd: number;  // Fee in USD - calculate XCH dynamically
+  user_role: 'proposer' | 'acceptor';
+  user_commit_status: string;
+  other_commit_status: string;
+  memo: string;
+}
+
+export interface PendingTransaction {
+  transaction_id: number;
+  to_address: string;
+  amount_mojos: number;
+  amount_xch: number;
+  memo: string;
+}
+
+export interface TradeTransaction {
+  id: number;
+  trade_id: number;
+  user_id: number;
+  tx_type: string;
+  tx_id?: string;
+  coin_id?: string;
+  from_address?: string;
+  to_address?: string;
+  amount_mojos: number;
+  status: string;
+  confirmations?: number;
+  error_message?: string;
+  created_at: string;
+  mempool_at?: string;
+  confirmed_at?: string;
 }
 
 export interface CreateReviewRequest {
@@ -207,6 +247,30 @@ export const tradeApi = {
 
   delete: async (id: number): Promise<void> => {
     await rpcCall('trade_delete', { id });
+  },
+
+  // Commitment
+  getCommitmentDetails: async (tradeId: number): Promise<CommitmentDetails> => {
+    const result = await rpcCall<CommitmentDetails>('commitment_get_details', { trade_id: tradeId });
+    return result;
+  },
+
+  createPendingCommitment: async (tradeId: number, amountMojos: number, fromAddress?: string): Promise<PendingTransaction> => {
+    const result = await rpcCall<PendingTransaction>('commitment_create_pending', { 
+      trade_id: tradeId,
+      amount_mojos: amountMojos,
+      from_address: fromAddress 
+    });
+    return result;
+  },
+
+  submitCommitmentTx: async (transactionId: number, txId: string): Promise<void> => {
+    await rpcCall('commitment_submit_tx', { transaction_id: transactionId, tx_id: txId });
+  },
+
+  listTransactions: async (tradeId: number): Promise<TradeTransaction[]> => {
+    const result = await rpcCall<any>('commitment_list_transactions', { trade_id: tradeId });
+    return result.transactions || [];
   },
 
   // Reviews

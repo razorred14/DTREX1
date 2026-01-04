@@ -15,6 +15,15 @@ pub struct User {
     pub username: String,
 }
 
+/// User info for admin dashboard
+#[derive(Debug, Clone, FromRow, Serialize)]
+pub struct UserAdmin {
+    pub id: i64,
+    pub username: String,
+    pub is_admin: bool,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
 #[derive(Debug, FromRow)]
 pub struct UserForLogin {
     pub id: i64,
@@ -22,6 +31,7 @@ pub struct UserForLogin {
     pub pwd: String,
     pub pwd_salt: Uuid,
     pub token_salt: Uuid,
+    pub is_admin: bool,
 }
 
 #[derive(Debug, FromRow)]
@@ -29,6 +39,7 @@ pub struct UserForAuth {
     pub id: i64,
     pub username: String,
     pub token_salt: Uuid,
+    pub is_admin: bool,
 }
 
 #[derive(Deserialize)]
@@ -47,7 +58,7 @@ impl UserBmc {
     /// Get user for login (includes password hash)
     pub async fn first_by_username(db: &Db, username: &str) -> Result<UserForLogin, sqlx::Error> {
         let user = sqlx::query_as::<_, UserForLogin>(
-            "SELECT id, username, pwd, pwd_salt, token_salt FROM users WHERE username = $1",
+            "SELECT id, username, pwd, pwd_salt, token_salt, COALESCE(is_admin, false) as is_admin FROM users WHERE username = $1",
         )
         .bind(username)
         .fetch_one(db)
@@ -59,7 +70,7 @@ impl UserBmc {
     /// Get user for auth (for token validation)
     pub async fn first_by_id_for_auth(db: &Db, user_id: i64) -> Result<UserForAuth, sqlx::Error> {
         let user = sqlx::query_as::<_, UserForAuth>(
-            "SELECT id, username, token_salt FROM users WHERE id = $1",
+            "SELECT id, username, token_salt, COALESCE(is_admin, false) as is_admin FROM users WHERE id = $1",
         )
         .bind(user_id)
         .fetch_one(db)
@@ -93,6 +104,59 @@ impl UserBmc {
         let user_id: i64 = result.get("id");
         Ok(user_id)
     }
+    
+    /// List all users (admin only)
+    pub async fn list_all(db: &Db) -> Result<Vec<UserAdmin>, sqlx::Error> {
+        let users = sqlx::query_as::<_, UserAdmin>(
+            "SELECT id, username, COALESCE(is_admin, false) as is_admin, created_at 
+             FROM users 
+             ORDER BY created_at DESC"
+        )
+        .fetch_all(db)
+        .await?;
+        
+        Ok(users)
+    }
+    
+    /// Set user admin status (admin only)
+    pub async fn set_admin_status(db: &Db, user_id: i64, is_admin: bool) -> Result<(), sqlx::Error> {
+        sqlx::query("UPDATE users SET is_admin = $1 WHERE id = $2")
+            .bind(is_admin)
+            .bind(user_id)
+            .execute(db)
+            .await?;
+        
+        Ok(())
+    }
+    
+    /// Get user trade stats
+    pub async fn get_user_stats(db: &Db, user_id: i64) -> Result<UserStats, sqlx::Error> {
+        // Count trades where user is proposer or acceptor
+        let trade_count: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM trades WHERE proposer_id = $1 OR acceptor_id = $1"
+        )
+        .bind(user_id)
+        .fetch_one(db)
+        .await?;
+        
+        let completed_count: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM trades WHERE (proposer_id = $1 OR acceptor_id = $1) AND status = 'completed'"
+        )
+        .bind(user_id)
+        .fetch_one(db)
+        .await?;
+        
+        Ok(UserStats {
+            total_trades: trade_count.0,
+            completed_trades: completed_count.0,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct UserStats {
+    pub total_trades: i64,
+    pub completed_trades: i64,
 }
 
 // ============================================================================

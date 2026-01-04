@@ -9,6 +9,7 @@ use crate::ctx::Ctx;
 use crate::model::{
     ContractBmc, ContractForCreate, ContractForUpdate, ModelManager,
     TradeBmc, TradeForCreate, TradeAcceptParams, ReviewBmc, ReviewForCreate,
+    TransactionBmc, TradeTransactionForCreate, UserBmc,
 };
 use crate::app_state::AppState;
 
@@ -64,6 +65,10 @@ pub async fn rpc_handler(
         "login" => crate::api::auth::rpc_login(mm, rpc_req.params).await,
         "logout" => crate::api::auth::rpc_logout().await,
         "register" => crate::api::auth::rpc_register(mm, rpc_req.params).await,
+        "user_me" => {
+            if let Some(ctx) = ctx { rpc_user_me(ctx).await }
+            else { Err(unauthorized_error()) }
+        }
 
         // ============================================
         // Trade Proposals (Public)
@@ -119,6 +124,66 @@ pub async fn rpc_handler(
             else { Err(unauthorized_error()) }
         }
         "user_reviews" => rpc_user_reviews(mm, rpc_req.params).await,
+
+        // ============================================
+        // Commitment & Transactions
+        // ============================================
+        "commitment_get_details" => {
+            if let Some(ctx) = ctx { rpc_commitment_get_details(mm, ctx, rpc_req.params).await }
+            else { Err(unauthorized_error()) }
+        }
+        "commitment_create_pending" => {
+            if let Some(ctx) = ctx { rpc_commitment_create_pending(mm, ctx, rpc_req.params).await }
+            else { Err(unauthorized_error()) }
+        }
+        "commitment_submit_tx" => {
+            if let Some(ctx) = ctx { rpc_commitment_submit_tx(mm, ctx, rpc_req.params).await }
+            else { Err(unauthorized_error()) }
+        }
+        "commitment_list_transactions" => {
+            if let Some(ctx) = ctx { rpc_commitment_list_transactions(mm, ctx, rpc_req.params).await }
+            else { Err(unauthorized_error()) }
+        }
+        "config_set_exchange_wallet" => {
+            if let Some(ctx) = ctx { rpc_config_set_exchange_wallet(mm, ctx, rpc_req.params).await }
+            else { Err(unauthorized_error()) }
+        }
+        "config_get_exchange_wallet" => {
+            if let Some(ctx) = ctx { rpc_config_get_exchange_wallet(mm, ctx).await }
+            else { Err(unauthorized_error()) }
+        }
+
+        // ============================================
+        // User Administration (Admin only)
+        // ============================================
+        "admin_list_users" => {
+            if let Some(ctx) = ctx { rpc_admin_list_users(mm, ctx).await }
+            else { Err(unauthorized_error()) }
+        }
+        "admin_set_user_admin" => {
+            if let Some(ctx) = ctx { rpc_admin_set_user_admin(mm, ctx, rpc_req.params).await }
+            else { Err(unauthorized_error()) }
+        }
+        "admin_get_user_stats" => {
+            if let Some(ctx) = ctx { rpc_admin_get_user_stats(mm, ctx, rpc_req.params).await }
+            else { Err(unauthorized_error()) }
+        }
+        "admin_get_platform_stats" => {
+            if let Some(ctx) = ctx { rpc_admin_get_platform_stats(mm, ctx).await }
+            else { Err(unauthorized_error()) }
+        }
+        "admin_list_trades" => {
+            if let Some(ctx) = ctx { rpc_admin_list_trades(mm, ctx, rpc_req.params).await }
+            else { Err(unauthorized_error()) }
+        }
+        "admin_cancel_trade" => {
+            if let Some(ctx) = ctx { rpc_admin_cancel_trade(mm, ctx, rpc_req.params).await }
+            else { Err(unauthorized_error()) }
+        }
+        "admin_delete_trade" => {
+            if let Some(ctx) = ctx { rpc_admin_delete_trade(mm, ctx, rpc_req.params).await }
+            else { Err(unauthorized_error()) }
+        }
 
         // ============================================
         // Legacy Contract API (backward compatibility)
@@ -187,6 +252,17 @@ struct UserPublicInfo {
     verification_status: String,
     reputation_score: f64,
     total_trades: i32,
+}
+
+/// Get current user info including admin status
+async fn rpc_user_me(ctx: Ctx) -> Result<Value, RpcError> {
+    Ok(json!({
+        "user": {
+            "id": ctx.user_id(),
+            "username": ctx.username(),
+            "is_admin": ctx.is_admin()
+        }
+    }))
 }
 
 /// Trade with proposer info
@@ -315,7 +391,12 @@ async fn rpc_trade_get(mm: ModelManager, ctx: Ctx, params: Option<Value>) -> Res
         message: "Trade not found or unauthorized".to_string(),
         data: None,
     })?;
-    Ok(json!({ "trade": trade }))
+    
+    // Enrich with proposer info
+    let proposer = get_user_public_info(mm.db(), trade.proposer_id).await;
+    let trade_with_user = TradeWithUser { trade, proposer };
+    
+    Ok(json!({ "trade": trade_with_user }))
 }
 
 /// Accept a trade proposal (make an offer)
@@ -536,4 +617,533 @@ async fn rpc_contract_update(mm: ModelManager, ctx: Ctx, params: Option<Value>) 
         data: None,
     })?;
     Ok(json!({ "success": true }))
+}
+
+// ============================================
+// Commitment & Transaction RPC Functions
+// ============================================
+
+/// Get commitment details for a trade (fee amount, exchange wallet, status)
+async fn rpc_commitment_get_details(mm: ModelManager, ctx: Ctx, params: Option<Value>) -> Result<Value, RpcError> {
+    #[derive(Deserialize)]
+    struct Params { trade_id: i64 }
+    
+    let params: Params = serde_json::from_value(params.unwrap_or(json!({}))).map_err(|e| RpcError {
+        code: -32602,
+        message: format!("Invalid params: {}", e),
+        data: None,
+    })?;
+    
+    let details = TransactionBmc::get_commitment_details(&ctx, &mm, params.trade_id)
+        .await
+        .map_err(|e| RpcError {
+            code: 5000,
+            message: format!("Failed to get commitment details: {}", e),
+            data: None,
+        })?;
+    
+    Ok(json!({
+        "trade_id": details.trade_id,
+        "exchange_wallet_address": details.exchange_wallet_address,
+        "commitment_fee_usd": details.commitment_fee_usd,
+        "user_role": details.user_role,
+        "user_commit_status": details.user_commit_status,
+        "other_commit_status": details.other_commit_status,
+        "memo": details.memo
+    }))
+}
+
+/// Create a pending transaction record before wallet signing
+async fn rpc_commitment_create_pending(mm: ModelManager, ctx: Ctx, params: Option<Value>) -> Result<Value, RpcError> {
+    #[derive(Deserialize)]
+    struct Params {
+        trade_id: i64,
+        from_address: Option<String>,
+        amount_mojos: i64,  // Frontend calculates XCH amount from USD fee using live price
+    }
+    
+    let params: Params = serde_json::from_value(params.unwrap_or(json!({}))).map_err(|e| RpcError {
+        code: -32602,
+        message: format!("Invalid params: {}", e),
+        data: None,
+    })?;
+    
+    // Validate amount is reasonable (at least 1000 mojos, less than 10 XCH)
+    if params.amount_mojos < 1000 {
+        return Err(RpcError {
+            code: -32602,
+            message: "Amount too small".to_string(),
+            data: None,
+        });
+    }
+    if params.amount_mojos > 10_000_000_000_000 {
+        return Err(RpcError {
+            code: -32602,
+            message: "Amount too large".to_string(),
+            data: None,
+        });
+    }
+    
+    // Get commitment details (for destination address and validation)
+    let details = TransactionBmc::get_commitment_details(&ctx, &mm, params.trade_id)
+        .await
+        .map_err(|e| RpcError {
+            code: 5000,
+            message: format!("Failed to get commitment details: {}", e),
+            data: None,
+        })?;
+    
+    // Create pending transaction with frontend-calculated amount
+    let tx = TradeTransactionForCreate {
+        trade_id: params.trade_id,
+        tx_type: "commitment_fee".to_string(),
+        tx_id: None,
+        from_address: params.from_address,
+        to_address: Some(details.exchange_wallet_address.clone()),
+        amount_mojos: params.amount_mojos,
+    };
+    
+    let transaction_id = TransactionBmc::create(&ctx, &mm, tx)
+        .await
+        .map_err(|e| RpcError {
+            code: 5000,
+            message: format!("Failed to create pending transaction: {}", e),
+            data: None,
+        })?;
+    
+    let amount_xch = params.amount_mojos as f64 / 1_000_000_000_000.0;
+    
+    Ok(json!({
+        "transaction_id": transaction_id,
+        "to_address": details.exchange_wallet_address,
+        "amount_mojos": params.amount_mojos,
+        "amount_xch": amount_xch,
+        "memo": details.memo
+    }))
+}
+
+/// Submit the transaction ID after wallet has signed and broadcast
+async fn rpc_commitment_submit_tx(mm: ModelManager, ctx: Ctx, params: Option<Value>) -> Result<Value, RpcError> {
+    #[derive(Deserialize)]
+    struct Params {
+        transaction_id: i64,
+        tx_id: String,
+    }
+    
+    let params: Params = serde_json::from_value(params.unwrap_or(json!({}))).map_err(|e| RpcError {
+        code: -32602,
+        message: format!("Invalid params: {}", e),
+        data: None,
+    })?;
+    
+    TransactionBmc::submit_tx_id(&ctx, &mm, params.transaction_id, &params.tx_id)
+        .await
+        .map_err(|e| RpcError {
+            code: 5000,
+            message: format!("Failed to submit transaction: {}", e),
+            data: None,
+        })?;
+    
+    Ok(json!({
+        "success": true,
+        "status": "mempool",
+        "message": "Transaction submitted. Awaiting blockchain confirmation."
+    }))
+}
+
+/// List all transactions for a trade
+async fn rpc_commitment_list_transactions(mm: ModelManager, ctx: Ctx, params: Option<Value>) -> Result<Value, RpcError> {
+    #[derive(Deserialize)]
+    struct Params { trade_id: i64 }
+    
+    let params: Params = serde_json::from_value(params.unwrap_or(json!({}))).map_err(|e| RpcError {
+        code: -32602,
+        message: format!("Invalid params: {}", e),
+        data: None,
+    })?;
+    
+    let transactions = TransactionBmc::list_for_trade(&ctx, &mm, params.trade_id)
+        .await
+        .map_err(|e| RpcError {
+            code: 5000,
+            message: format!("Failed to list transactions: {}", e),
+            data: None,
+        })?;
+    
+    Ok(json!({ "transactions": transactions }))
+}
+
+/// Set the exchange wallet address (admin only)
+async fn rpc_config_set_exchange_wallet(mm: ModelManager, ctx: Ctx, params: Option<Value>) -> Result<Value, RpcError> {
+    // Admin check
+    if !ctx.is_admin() {
+        return Err(RpcError {
+            code: 4003,
+            message: "Admin access required".to_string(),
+            data: None,
+        });
+    }
+    
+    #[derive(Deserialize)]
+    struct Params { 
+        wallet_address: String,
+        commitment_fee_usd: Option<f64>,  // Fee in USD (e.g., 1.0 for $1)
+    }
+    
+    let params: Params = serde_json::from_value(params.unwrap_or(json!({}))).map_err(|e| RpcError {
+        code: -32602,
+        message: format!("Invalid params: {}", e),
+        data: None,
+    })?;
+    
+    // Validate address format
+    if !params.wallet_address.starts_with("xch1") || params.wallet_address.len() != 62 {
+        return Err(RpcError {
+            code: -32602,
+            message: "Invalid XCH address format".to_string(),
+            data: None,
+        });
+    }
+    
+    TransactionBmc::set_exchange_wallet(&ctx, &mm, &params.wallet_address)
+        .await
+        .map_err(|e| RpcError {
+            code: 5000,
+            message: format!("Failed to set exchange wallet: {}", e),
+            data: None,
+        })?;
+    
+    // Store commitment fee in USD (default $1.00 if not provided)
+    let fee_usd = params.commitment_fee_usd.unwrap_or(1.0);
+    sqlx::query(
+        "INSERT INTO exchange_config (key, value, description, updated_at) 
+         VALUES ('commitment_fee_usd', $1, 'Commitment fee in USD - XCH calculated dynamically', NOW())
+         ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()"
+    )
+    .bind(fee_usd.to_string())
+    .execute(mm.db())
+    .await
+    .map_err(|e| RpcError {
+        code: 5000,
+        message: format!("Failed to set commitment fee: {}", e),
+        data: None,
+    })?;
+    
+    Ok(json!({
+        "success": true,
+        "message": "Exchange wallet configuration updated"
+    }))
+}
+
+/// Get the exchange wallet address - readable by any authenticated user (needed for commitment fees)
+/// Returns USD fee amount - frontend calculates XCH dynamically using live price
+async fn rpc_config_get_exchange_wallet(mm: ModelManager, ctx: Ctx) -> Result<Value, RpcError> {
+    let address = TransactionBmc::get_exchange_wallet(&ctx, &mm)
+        .await
+        .ok();
+    
+    // Get fee in USD (default $1.00)
+    let fee_usd: f64 = sqlx::query_as::<_, (String,)>(
+        "SELECT value FROM exchange_config WHERE key = 'commitment_fee_usd'"
+    )
+    .fetch_optional(mm.db())
+    .await
+    .map_err(|e| RpcError {
+        code: 5000,
+        message: format!("Database error: {}", e),
+        data: None,
+    })?
+    .and_then(|(v,)| v.parse::<f64>().ok())
+    .unwrap_or(1.0); // Default $1.00
+    
+    Ok(json!({
+        "wallet_address": address,
+        "commitment_fee_usd": fee_usd
+    }))
+}
+
+// ============================================
+// User Administration RPCs (Admin only)
+// ============================================
+
+/// List all users (admin only)
+async fn rpc_admin_list_users(mm: ModelManager, ctx: Ctx) -> Result<Value, RpcError> {
+    // Admin check
+    if !ctx.is_admin() {
+        return Err(RpcError {
+            code: 4003,
+            message: "Admin access required".to_string(),
+            data: None,
+        });
+    }
+    
+    let users = UserBmc::list_all(mm.db())
+        .await
+        .map_err(|e| RpcError {
+            code: 5000,
+            message: format!("Failed to list users: {}", e),
+            data: None,
+        })?;
+    
+    Ok(json!({ "users": users }))
+}
+
+/// Set user admin status (admin only)
+async fn rpc_admin_set_user_admin(mm: ModelManager, ctx: Ctx, params: Option<Value>) -> Result<Value, RpcError> {
+    // Admin check
+    if !ctx.is_admin() {
+        return Err(RpcError {
+            code: 4003,
+            message: "Admin access required".to_string(),
+            data: None,
+        });
+    }
+    
+    #[derive(Deserialize)]
+    struct Params {
+        user_id: i64,
+        is_admin: bool,
+    }
+    
+    let params: Params = serde_json::from_value(params.unwrap_or(json!({}))).map_err(|e| RpcError {
+        code: -32602,
+        message: format!("Invalid params: {}", e),
+        data: None,
+    })?;
+    
+    // Prevent admin from removing their own admin status
+    if params.user_id == ctx.user_id() && !params.is_admin {
+        return Err(RpcError {
+            code: 4003,
+            message: "Cannot remove your own admin status".to_string(),
+            data: None,
+        });
+    }
+    
+    UserBmc::set_admin_status(mm.db(), params.user_id, params.is_admin)
+        .await
+        .map_err(|e| RpcError {
+            code: 5000,
+            message: format!("Failed to update user: {}", e),
+            data: None,
+        })?;
+    
+    Ok(json!({
+        "success": true,
+        "message": if params.is_admin { "User promoted to admin" } else { "Admin status removed" }
+    }))
+}
+
+/// Get user stats (admin only)
+async fn rpc_admin_get_user_stats(mm: ModelManager, ctx: Ctx, params: Option<Value>) -> Result<Value, RpcError> {
+    // Admin check
+    if !ctx.is_admin() {
+        return Err(RpcError {
+            code: 4003,
+            message: "Admin access required".to_string(),
+            data: None,
+        });
+    }
+    
+    #[derive(Deserialize)]
+    struct Params {
+        user_id: i64,
+    }
+    
+    let params: Params = serde_json::from_value(params.unwrap_or(json!({}))).map_err(|e| RpcError {
+        code: -32602,
+        message: format!("Invalid params: {}", e),
+        data: None,
+    })?;
+    
+    let stats = UserBmc::get_user_stats(mm.db(), params.user_id)
+        .await
+        .map_err(|e| RpcError {
+            code: 5000,
+            message: format!("Failed to get user stats: {}", e),
+            data: None,
+        })?;
+    
+    Ok(json!(stats))
+}
+
+/// Get platform-wide stats (admin only)
+async fn rpc_admin_get_platform_stats(mm: ModelManager, ctx: Ctx) -> Result<Value, RpcError> {
+    // Admin check
+    if !ctx.is_admin() {
+        return Err(RpcError {
+            code: 4003,
+            message: "Admin access required".to_string(),
+            data: None,
+        });
+    }
+    
+    // User count
+    let user_count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
+        .fetch_one(mm.db())
+        .await
+        .map_err(|e| RpcError {
+            code: 5000,
+            message: format!("Database error: {}", e),
+            data: None,
+        })?;
+    
+    // Trade counts by status
+    let total_trades: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM trades")
+        .fetch_one(mm.db())
+        .await
+        .unwrap_or((0,));
+    
+    let active_trades: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM trades WHERE status IN ('proposal', 'matched', 'committed', 'escrow')"
+    )
+        .fetch_one(mm.db())
+        .await
+        .unwrap_or((0,));
+    
+    let completed_trades: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM trades WHERE status = 'completed'"
+    )
+        .fetch_one(mm.db())
+        .await
+        .unwrap_or((0,));
+    
+    Ok(json!({
+        "total_users": user_count.0,
+        "total_trades": total_trades.0,
+        "active_trades": active_trades.0,
+        "completed_trades": completed_trades.0
+    }))
+}
+
+// List all trades for admin
+async fn rpc_admin_list_trades(mm: ModelManager, ctx: Ctx, params: Option<Value>) -> Result<Value, RpcError> {
+    // Admin check
+    if !ctx.is_admin() {
+        return Err(RpcError {
+            code: 4003,
+            message: "Admin access required".to_string(),
+            data: None,
+        });
+    }
+    
+    let limit = params.as_ref()
+        .and_then(|p| p.get("limit"))
+        .and_then(|v| v.as_i64())
+        .unwrap_or(50) as i32;
+    let offset = params.as_ref()
+        .and_then(|p| p.get("offset"))
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let status_filter = params.as_ref()
+        .and_then(|p| p.get("status"))
+        .and_then(|v| v.as_str());
+    
+    // Build query based on status filter
+    let trades: Vec<(i64, i64, String, String, Option<String>, f64, String, chrono::DateTime<chrono::Utc>)> = 
+        if let Some(status) = status_filter {
+            sqlx::query_as(
+                r#"SELECT t.id, t.proposer_id, t.proposer_item_title, t.proposer_item_description, t.trade_type, t.proposer_item_value_usd, t.status, t.created_at
+                   FROM trades t
+                   WHERE t.status = $1
+                   ORDER BY t.created_at DESC
+                   LIMIT $2 OFFSET $3"#
+            )
+            .bind(status)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(mm.db())
+            .await
+        } else {
+            sqlx::query_as(
+                r#"SELECT t.id, t.proposer_id, t.proposer_item_title, t.proposer_item_description, t.trade_type, t.proposer_item_value_usd, t.status, t.created_at
+                   FROM trades t
+                   ORDER BY t.created_at DESC
+                   LIMIT $1 OFFSET $2"#
+            )
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(mm.db())
+            .await
+        }
+        .map_err(|e| RpcError {
+            code: 5000,
+            message: format!("Database error: {}", e),
+            data: None,
+        })?;
+    
+    let trades_json: Vec<Value> = trades.iter().map(|t| {
+        json!({
+            "id": t.0,
+            "proposer_id": t.1,
+            "item_title": t.2,
+            "item_description": t.3,
+            "trade_type": t.4.clone().unwrap_or_else(|| "item_for_item".to_string()),
+            "item_value_usd": t.5,
+            "status": t.6,
+            "created_at": t.7.to_rfc3339()
+        })
+    }).collect();
+    
+    Ok(json!({ "trades": trades_json }))
+}
+
+// Admin cancel any trade
+async fn rpc_admin_cancel_trade(mm: ModelManager, ctx: Ctx, params: Option<Value>) -> Result<Value, RpcError> {
+    // Admin check
+    if !ctx.is_admin() {
+        return Err(RpcError {
+            code: 4003,
+            message: "Admin access required".to_string(),
+            data: None,
+        });
+    }
+    
+    let id = params.as_ref()
+        .and_then(|p| p.get("id"))
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| RpcError {
+            code: 4000,
+            message: "Missing required parameter: id".to_string(),
+            data: None,
+        })?;
+    
+    TradeBmc::admin_cancel(&mm, id).await
+        .map_err(|e| RpcError {
+            code: 5000,
+            message: format!("Failed to cancel trade: {:?}", e),
+            data: None,
+        })?;
+    
+    Ok(json!({ "success": true, "message": "Trade cancelled by admin" }))
+}
+
+// Admin delete any trade
+async fn rpc_admin_delete_trade(mm: ModelManager, ctx: Ctx, params: Option<Value>) -> Result<Value, RpcError> {
+    // Admin check
+    if !ctx.is_admin() {
+        return Err(RpcError {
+            code: 4003,
+            message: "Admin access required".to_string(),
+            data: None,
+        });
+    }
+    
+    let id = params.as_ref()
+        .and_then(|p| p.get("id"))
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| RpcError {
+            code: 4000,
+            message: "Missing required parameter: id".to_string(),
+            data: None,
+        })?;
+    
+    TradeBmc::admin_delete(&mm, id).await
+        .map_err(|e| RpcError {
+            code: 5000,
+            message: format!("Failed to delete trade: {:?}", e),
+            data: None,
+        })?;
+    
+    Ok(json!({ "success": true, "message": "Trade deleted by admin" }))
 }

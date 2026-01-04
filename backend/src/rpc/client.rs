@@ -312,6 +312,89 @@ impl ChiaRpcClient {
         }
     }
 
+    /// Get a transaction record from the wallet by transaction ID
+    /// This is used to verify commitment fee payments
+    pub async fn get_transaction(
+        &self,
+        transaction_id: &str,
+    ) -> Result<TransactionRecord, Box<dyn std::error::Error + Send + Sync>> {
+        // Use wallet RPC endpoint
+        let wallet_url = self.base_url.replace(":8555", ":9256");
+        let url = format!("{}/get_transaction", wallet_url);
+        
+        let body = json!({
+            "transaction_id": transaction_id
+        });
+
+        // Use wallet proxy for SSL
+        let cert_path = "ssl/wallet/private_wallet.crt";
+        let key_path = "ssl/wallet/private_wallet.key";
+        let proxy_path = "ssl/wallet/wallet_rpc_proxy.py";
+        
+        let mut cmd = Command::new("python3");
+        cmd.arg(proxy_path)
+            .arg("get_transaction")
+            .arg(body.to_string())
+            .env("CHIA_WALLET_RPC_URL", &url)
+            .env("CHIA_WALLET_CERT", cert_path)
+            .env("CHIA_WALLET_KEY", key_path);
+        
+        tracing::info!("[wallet_rpc_proxy] Getting transaction: {}", transaction_id);
+        let output = cmd.output()?;
+        
+        if !output.status.success() {
+            let err = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Failed to get transaction: {}", err).into());
+        }
+        
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let parsed: serde_json::Value = serde_json::from_str(&stdout)?;
+        
+        if let Some(error) = parsed.get("error") {
+            return Err(format!("Transaction lookup error: {}", error).into());
+        }
+        
+        // Parse transaction from response
+        let tx = parsed.get("transaction")
+            .ok_or("No transaction in response")?;
+        
+        Ok(TransactionRecord {
+            transaction_id: tx.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            confirmed: tx.get("confirmed").and_then(|v| v.as_bool()).unwrap_or(false),
+            confirmed_at_height: tx.get("confirmed_at_height").and_then(|v| v.as_u64()),
+            amount: tx.get("amount").and_then(|v| v.as_u64()).unwrap_or(0),
+            fee_amount: tx.get("fee_amount").and_then(|v| v.as_u64()).unwrap_or(0),
+            to_address: tx.get("to_address").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            sent_to: tx.get("sent_to").and_then(|v| v.as_array()).map(|a| a.len()).unwrap_or(0) > 0,
+        })
+    }
+
+    /// Check if a transaction is in the mempool
+    pub async fn is_tx_in_mempool(
+        &self,
+        transaction_id: &str,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        let url = format!("{}/get_all_mempool_tx_ids", self.base_url);
+        
+        Self::log_request_details("POST", &url, None);
+        let response = self.client.post(&url).json(&json!({})).send().await?;
+        Self::log_response_details(response.status(), response.headers());
+        
+        let result: serde_json::Value = response.json().await?;
+        
+        if let Some(tx_ids) = result.get("tx_ids").and_then(|v| v.as_array()) {
+            for tx_id in tx_ids {
+                if let Some(id) = tx_id.as_str() {
+                    if id == transaction_id {
+                        return Ok(true);
+                    }
+                }
+            }
+        }
+        
+        Ok(false)
+    }
+
     /// Check node health
     pub async fn health_check(&self) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         let url = format!("{}/healthz", self.base_url);
@@ -326,6 +409,17 @@ impl ChiaRpcClient {
 pub struct PuzzleAndSolution {
     pub puzzle_reveal: String,
     pub solution: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TransactionRecord {
+    pub transaction_id: String,
+    pub confirmed: bool,
+    pub confirmed_at_height: Option<u64>,
+    pub amount: u64,
+    pub fee_amount: u64,
+    pub to_address: String,
+    pub sent_to: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

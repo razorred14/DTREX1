@@ -61,6 +61,7 @@ pub async fn rpc_login(mm: ModelManager, params: Option<Value>) -> Result<Value,
         "user": {
             "id": user.id,
             "username": user.username,
+            "is_admin": user.is_admin,
         },
         "token": token,
     }))
@@ -122,6 +123,7 @@ pub async fn rpc_register(mm: ModelManager, params: Option<Value>) -> Result<Val
         "user": {
             "id": user_id,
             "username": params.username,
+            "is_admin": false,
         }
     }))
 }

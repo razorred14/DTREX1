@@ -9,3 +9,4 @@ pub mod signing;
 pub mod ssl;
 pub mod wallet_rpc;
 pub mod node_rpc;
+pub mod verify;

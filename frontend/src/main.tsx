@@ -13,6 +13,7 @@ import TradeDetail from "./pages/TradeDetail";
 import MakeOffer from "./pages/MakeOffer";
 import ContactsPage from "./pages/Contacts";
 import Settings from "./pages/Settings";
+import Admin from "./pages/Admin";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Navbar from "./components/Navbar";
@@ -107,6 +108,17 @@ const router = createBrowserRouter([
         <div className="min-h-screen bg-gray-50">
           <Navbar />
           <Settings />
+        </div>
+      </ProtectedRoute>
+    ),
+  },
+  {
+    path: "/admin",
+    element: (
+      <ProtectedRoute>
+        <div className="min-h-screen bg-gray-50">
+          <Navbar />
+          <Admin />
         </div>
       </ProtectedRoute>
     ),

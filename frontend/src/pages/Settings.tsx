@@ -1,5 +1,4 @@
 
-import React, { useEffect, useState } from "react";
 import ConfigurationStatus from "../components/ConfigurationStatus";
 import ChiaNodeConnector from "../components/ChiaNodeConnector";
 import ChiaWalletStatusCard from "../components/ChiaWalletStatusCard";

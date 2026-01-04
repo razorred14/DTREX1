@@ -28,7 +28,7 @@ pub async fn mw_ctx_resolve(
         if let Ok(user_id) = validate_token(token) {
             // Get user from database
             if let Ok(user) = UserBmc::first_by_id_for_auth(mm.db(), user_id).await {
-                let ctx = Ctx::new(user.id, user.username);
+                let ctx = Ctx::new_with_admin(user.id, user.username, user.is_admin);
                 req.extensions_mut().insert(ctx);
             }
         }
