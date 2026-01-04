@@ -9,6 +9,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub enum Error {
     LoginFail,
     InternalServer,
+    NotFound,
+    BadRequest,
     // Add this for your contract operations
     EntityNotFound { entity: &'static str, id: i64 },
 }
@@ -19,6 +21,12 @@ impl IntoResponse for Error {
         let error_msg = match &self {
             Error::LoginFail => "Login failed",
             Error::InternalServer => "Internal server error",
+            Error::NotFound => {
+                return (StatusCode::NOT_FOUND, "Resource not found").into_response();
+            }
+            Error::BadRequest => {
+                return (StatusCode::BAD_REQUEST, "Bad request").into_response();
+            }
             Error::EntityNotFound { entity, id } => {
                 return (
                     StatusCode::NOT_FOUND,

@@ -6,11 +6,12 @@ import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "./contexts/AuthContext";
 import Home from "./pages/Home";
-import CreateContract from "./pages/CreateContract";
-import ViewContracts from "./pages/ViewContracts";
+import BrowseTrades from "./pages/BrowseTrades";
+import CreateTrade from "./pages/CreateTrade";
+import MyTrades from "./pages/MyTrades";
+import TradeDetail from "./pages/TradeDetail";
+import MakeOffer from "./pages/MakeOffer";
 import ContactsPage from "./pages/Contacts";
-import Wallet from "./pages/Wallet";
-import WalletView from "./pages/WalletView";
 import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -20,17 +21,6 @@ import ProtectedRoute from "./components/ProtectedRoute";
 const client = new QueryClient();
 
 const router = createBrowserRouter([
-  {
-    path: "/wallet-view",
-    element: (
-      <ProtectedRoute>
-        <div className="min-h-screen bg-gray-50">
-          <Navbar />
-          <WalletView />
-        </div>
-      </ProtectedRoute>
-    ),
-  },
   {
     path: "/login",
     element: <Login />,
@@ -42,10 +32,37 @@ const router = createBrowserRouter([
   {
     path: "/",
     element: (
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <Home />
+      </div>
+    ),
+  },
+  {
+    path: "/trades",
+    element: (
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <BrowseTrades />
+      </div>
+    ),
+  },
+  {
+    path: "/trade/:id",
+    element: (
+      <div className="min-h-screen bg-gray-50">
+        <Navbar />
+        <TradeDetail />
+      </div>
+    ),
+  },
+  {
+    path: "/trade/:id/offer",
+    element: (
       <ProtectedRoute>
         <div className="min-h-screen bg-gray-50">
           <Navbar />
-          <Home />
+          <MakeOffer />
         </div>
       </ProtectedRoute>
     ),
@@ -56,18 +73,18 @@ const router = createBrowserRouter([
       <ProtectedRoute>
         <div className="min-h-screen bg-gray-50">
           <Navbar />
-          <CreateContract />
+          <CreateTrade />
         </div>
       </ProtectedRoute>
     ),
   },
   {
-    path: "/contracts",
+    path: "/my-trades",
     element: (
       <ProtectedRoute>
         <div className="min-h-screen bg-gray-50">
           <Navbar />
-          <ViewContracts />
+          <MyTrades />
         </div>
       </ProtectedRoute>
     ),
@@ -79,17 +96,6 @@ const router = createBrowserRouter([
         <div className="min-h-screen bg-gray-50">
           <Navbar />
           <ContactsPage />
-        </div>
-      </ProtectedRoute>
-    ),
-  },
-  {
-    path: "/wallet",
-    element: (
-      <ProtectedRoute>
-        <div className="min-h-screen bg-gray-50">
-          <Navbar />
-          <Wallet />
         </div>
       </ProtectedRoute>
     ),

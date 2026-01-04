@@ -50,7 +50,181 @@ export async function rpcCall<T>(method: string, params?: any): Promise<T> {
   return response.data.result;
 }
 
-// Contract API calls using JSON-RPC
+// ============================================
+// Trade Types
+// ============================================
+
+export interface UserPublicInfo {
+  id: number;
+  username: string;
+  verification_status: string; // 'unverified' | 'email' | 'phone' | 'verified'
+  reputation_score: number; // 0.00 - 5.00
+  total_trades: number;
+}
+
+export interface Trade {
+  id: number;
+  proposer_id: number;
+  acceptor_id?: number;
+  status: string; // 'proposal' | 'matched' | 'committed' | 'escrow' | 'completed' | 'disputed' | 'cancelled'
+  
+  // Proposer info (enriched from backend)
+  proposer?: UserPublicInfo;
+  
+  // Proposer's item
+  proposer_item_title: string;
+  proposer_item_description: string;
+  proposer_item_condition?: string;
+  proposer_item_value_usd: number;
+  proposer_item_category?: string;
+  
+  // Acceptor's offer
+  acceptor_item_title?: string;
+  acceptor_item_description?: string;
+  acceptor_item_condition?: string;
+  acceptor_item_value_usd?: number;
+  acceptor_xch_offer?: number;
+  
+  // Trade details
+  xch_amount?: number;
+  trade_type?: string;
+  
+  // Shipping
+  proposer_tracking_number?: string;
+  proposer_shipped_at?: string;
+  acceptor_tracking_number?: string;
+  acceptor_shipped_at?: string;
+  
+  // Timestamps
+  committed_at?: string;
+  escrow_start_date?: string;
+  escrow_end_date?: string;
+  completed_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WishlistItem {
+  wishlist_type: string; // 'item' | 'xch' | 'mixed'
+  item_description?: string;
+  item_min_value_usd?: number;
+  xch_amount?: number; // in mojos (1 XCH = 1,000,000,000,000 mojos)
+}
+
+export interface CreateTradeRequest {
+  item_title: string;
+  item_description: string;
+  item_condition?: string;
+  item_value_usd: number;
+  item_category?: string;
+  wishlist?: WishlistItem[];
+}
+
+export interface AcceptTradeRequest {
+  trade_id: number;
+  offer_type: string; // 'item' | 'xch' | 'mixed'
+  item_title?: string;
+  item_description?: string;
+  item_condition?: string;
+  item_value_usd?: number;
+  xch_amount?: number;
+}
+
+export interface TradeReview {
+  id: number;
+  trade_id: number;
+  reviewer_id: number;
+  reviewee_id: number;
+  timeliness_score: number;
+  packaging_score: number;
+  value_honesty_score: number;
+  state_accuracy_score: number;
+  overall_score: number;
+  comment?: string;
+  created_at: string;
+}
+
+export interface CreateReviewRequest {
+  trade_id: number;
+  timeliness: number;
+  packaging: number;
+  value_honesty: number;
+  state_accuracy: number;
+  comment?: string;
+}
+
+// ============================================
+// Trade API
+// ============================================
+
+export const tradeApi = {
+  // Public methods
+  listProposals: async (limit = 50, offset = 0): Promise<Trade[]> => {
+    const result = await rpcCall<any>('trade_list_proposals', { limit, offset });
+    return result.trades || [];
+  },
+
+  getPublic: async (id: number): Promise<Trade> => {
+    const result = await rpcCall<any>('trade_get_public', { id });
+    return result.trade;
+  },
+
+  // Authenticated methods
+  create: async (data: CreateTradeRequest): Promise<number> => {
+    const result = await rpcCall<any>('trade_create', data);
+    return result.trade_id;
+  },
+
+  myTrades: async (): Promise<Trade[]> => {
+    const result = await rpcCall<any>('trade_my_trades');
+    return result.trades || [];
+  },
+
+  get: async (id: number): Promise<Trade> => {
+    const result = await rpcCall<any>('trade_get', { id });
+    return result.trade;
+  },
+
+  accept: async (data: AcceptTradeRequest): Promise<void> => {
+    await rpcCall('trade_accept', data);
+  },
+
+  commit: async (tradeId: number): Promise<void> => {
+    await rpcCall('trade_commit', { trade_id: tradeId });
+  },
+
+  addTracking: async (tradeId: number, trackingNumber: string, carrier: string): Promise<void> => {
+    await rpcCall('trade_add_tracking', { trade_id: tradeId, tracking_number: trackingNumber, carrier });
+  },
+
+  complete: async (tradeId: number): Promise<void> => {
+    await rpcCall('trade_complete', { trade_id: tradeId });
+  },
+
+  cancel: async (tradeId: number): Promise<void> => {
+    await rpcCall('trade_cancel', { trade_id: tradeId });
+  },
+
+  delete: async (id: number): Promise<void> => {
+    await rpcCall('trade_delete', { id });
+  },
+
+  // Reviews
+  submitReview: async (data: CreateReviewRequest): Promise<number> => {
+    const result = await rpcCall<any>('trade_review', data);
+    return result.review_id;
+  },
+
+  getUserReviews: async (userId: number): Promise<TradeReview[]> => {
+    const result = await rpcCall<any>('user_reviews', { user_id: userId });
+    return result.reviews || [];
+  },
+};
+
+// ============================================
+// Legacy Contract Types (backward compatibility)
+// ============================================
+
 export interface CreateContractRequest {
   title: string;
   content: string;

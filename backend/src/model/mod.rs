@@ -1,9 +1,11 @@
 mod contract;
 mod file;
+mod trade;
 mod user;
 
 pub use contract::*;
 pub use file::*;
+pub use trade::*;
 pub use user::*;
 
 use crate::store::Db;

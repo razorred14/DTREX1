@@ -1,338 +1,508 @@
-# Application Workflow & Configuration Requirements
+# DTREX Trade Workflow
 
 ## Overview
 
-The Chia Contract Application now includes an intelligent configuration validation system that ensures all necessary services are running before users attempt to connect their wallets or perform blockchain operations.
+The Decentralized Trade Exchange (DTREX) implements a five-phase trading protocol that enables secure peer-to-peer bartering of any asset—physical or digital—using the Chia blockchain for trust and accountability.
 
-## Application Startup Sequence
+## Core Principles
 
-### Recommended Order (for optimal user experience):
+### Asset-First Trading
+- **Primary focus**: The actual items being exchanged
+- **USD as lens**: Fiat values are only for calibration, never transacted
+- **XCH as medium**: Chia cryptocurrency bridges value gaps
 
-```bash
-# Terminal 1: Start PostgreSQL (if not running)
-sudo systemctl start postgresql      # Linux
-# or
-brew services start postgresql@16    # macOS
+### Trust Through Verification
+- All participants must complete identity verification
+- Every trade is anchored to the blockchain
+- Reputation follows you across all trades
 
-# Terminal 2: Start Backend
-cd backend
-cargo run
-# ✓ Listening on http://localhost:8080
-
-# Terminal 3: Start Frontend
-cd frontend
-npm run dev
-# ✓ Available on http://127.0.0.1:5173
-```
-
-## Configuration Checks
-
-### What Gets Validated?
-
-The application automatically checks the following on page load and every 30 seconds:
-
-1. **Backend Service Status** ✅
-   - Endpoint: `GET /health`
-   - Required for: All RPC operations, wallet operations
-   - Status: **REQUIRED** for wallet connection
-
-2. **Chia Node Connection** ⚠️
-   - Endpoint: `GET /chia/node/status`
-   - Used for: On-chain contract deployment
-   - Status: **OPTIONAL** - Users can create contracts without it
-
-3. **Database Connection** (implicit)
-   - Validated through backend health check
-   - All user data requires this
-
-### Status Display
-
-Users see a **Configuration Status** panel at the top of the Home page showing:
+## The Five-Phase Trade Process
 
 ```
-✓ Backend Service: Connected
-✓ Chia Node Connection: Connected
-
-OR (if not ready):
-
-✗ Backend Service: Not responding
-  💡 Make sure to run: cd backend && cargo run
-
-⚠ Chia Node Connection: Not configured (optional)
-  💡 You can still create contracts without a Chia node connection
+┌─────────────────────────────────────────────────────────────────┐
+│                     DTREX TRADE LIFECYCLE                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Phase 1          Phase 2          Phase 3                      │
+│  ┌─────────┐     ┌─────────┐     ┌─────────┐                   │
+│  │PROPOSAL │────▶│ MATCH   │────▶│ COMMIT  │                   │
+│  │         │     │         │     │         │                   │
+│  │ Alice   │     │  Bob    │     │  Both   │                   │
+│  │ lists   │     │ offers  │     │  pay    │                   │
+│  │ item    │     │ trade   │     │  fee    │                   │
+│  └─────────┘     └─────────┘     └─────────┘                   │
+│       │               │               │                         │
+│       │               │               ▼                         │
+│       │               │         Phase 4                         │
+│       │               │         ┌─────────┐                     │
+│       │               │         │ ESCROW  │                     │
+│       │               │         │         │                     │
+│       │               │         │ 30-day  │                     │
+│       │               │         │ swap    │                     │
+│       │               │         └─────────┘                     │
+│       │               │               │                         │
+│       │               │               ▼                         │
+│       │               │         Phase 5                         │
+│       │               │         ┌─────────┐                     │
+│       │               │         │ REVIEW  │                     │
+│       │               │         │         │                     │
+│       │               │         │ Rate &  │                     │
+│       │               │         │ Settle  │                     │
+│       │               │         └─────────┘                     │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## Workflow by Use Case
+---
 
-### Use Case 1: Create Contracts Only (No Blockchain)
+## Phase 1: Trade Proposal
 
-**Requirements:**
-- ✅ Backend running (`cargo run`)
-- ❌ Chia node (optional)
+**Status**: `proposal`
 
-**Steps:**
-1. Start backend
-2. Open application
-3. Login/Register
-4. Create contracts
-5. No wallet connection needed
+### What Happens
+A verified user creates a trade proposal by listing an item they want to trade.
 
-**Configuration Status:**
+### Required Information
+| Field | Description | Example |
+|-------|-------------|---------|
+| Item Description | Detailed description of the item | "Near-Mint Pikachu (Base Set, 1st Edition)" |
+| Item Photos | Multiple angles, condition shots | 3-5 photos |
+| Fiat Reference | USD value for XCH calculation | $50.00 |
+| Item Condition | Standardized condition rating | "Near-Mint" |
+| Wishlist | What you'll accept in trade | See below |
+
+### Wishlist Options
+The proposer specifies acceptable trade formats:
+
+```json
+{
+  "wishlist": [
+    {
+      "type": "item",
+      "description": "Near-Mint Charizard (Base Set)",
+      "estimated_value_usd": 45.00
+    },
+    {
+      "type": "xch",
+      "amount": 1.25,
+      "note": "Direct XCH payment"
+    },
+    {
+      "type": "mixed",
+      "item_description": "Any Base Set Holo",
+      "item_min_value_usd": 20.00,
+      "xch_amount": 0.5
+    }
+  ]
+}
 ```
-✓ Backend Service: Connected
-⚠ Chia Node Connection: Not configured (optional)
+
+### User Interface Flow
+1. Click "Create Trade Proposal"
+2. Upload item photos
+3. Enter item description and condition
+4. Set fiat reference value (auto-converts to XCH)
+5. Build wishlist of acceptable trades
+6. Submit proposal
+
+### API Endpoint
+```typescript
+POST /api/rpc
+{
+  "method": "trade_create",
+  "params": {
+    "item_description": "Near-Mint Pikachu (Base Set, 1st Edition)",
+    "item_condition": "near_mint",
+    "item_value_usd": 50.00,
+    "photos": ["base64...", "base64..."],
+    "wishlist": [...]
+  }
+}
 ```
 
-### Use Case 2: Create & Deploy Contracts (With Blockchain)
+---
 
-**Requirements:**
-- ✅ Backend running
-- ✅ Chia node connected
-- ✅ Wallet connected
+## Phase 2: Value-Matched Acceptance
 
-**Steps:**
-1. Start backend
-2. Configure Chia node (RPC URL)
-3. Connect wallet (requires backend to be running)
-4. Create contracts
-5. Deploy to blockchain
+**Status**: `matched`
 
-**Configuration Status:**
+### What Happens
+Another verified user reviews the proposal and makes an offer that matches the wishlist criteria.
+
+### The Matching Process
+1. **Browse Proposals**: View open trade proposals
+2. **Evaluate Value**: Compare offered item to wishlist
+3. **Make Offer**: Submit your matching offer
+4. **Await Approval**: Proposer reviews and accepts/rejects
+
+### Value Parity Display
+The system shows both parties a clear value comparison:
+
 ```
-✓ Backend Service: Connected
-✓ Chia Node Connection: Connected
+┌──────────────────────────────────────────────────────┐
+│                  VALUE COMPARISON                     │
+├──────────────────────────────────────────────────────┤
+│  Alice Offers              Bob Offers                │
+│  ─────────────             ─────────────             │
+│  NM Pikachu                NM Charizard              │
+│  $50.00 (~1.25 XCH)        $55.00 (~1.38 XCH)       │
+│                                                      │
+│  ✓ Value Match: Bob offering +10% surplus value     │
+│                                                      │
+│  [ACCEPT TRADE]  [COUNTER OFFER]  [DECLINE]         │
+└──────────────────────────────────────────────────────┘
 ```
 
-### Use Case 3: Sign Existing Contracts with Wallet
+### Offer Types
+| Type | Description | Example |
+|------|-------------|---------|
+| Item-for-Item | Physical item swap | Charizard for Pikachu |
+| Item-for-XCH | Item traded for cryptocurrency | 1.25 XCH for Pikachu |
+| XCH-for-Item | Cryptocurrency for item | Pikachu for 1.25 XCH |
+| Mixed | Item + XCH combination | Bulbasaur + 0.5 XCH |
 
-**Requirements:**
-- ✅ Backend running
-- ❌ Chia node (optional)
-
-**Steps:**
-1. Start backend
-2. Connect wallet
-3. Select contract to sign
-4. Approve signature in wallet app
-5. Contract marked as signed
-
-**Configuration Status:**
+### API Endpoint
+```typescript
+POST /api/rpc
+{
+  "method": "trade_accept",
+  "params": {
+    "trade_id": 12345,
+    "offer_type": "item",
+    "item_description": "Near-Mint Charizard (Base Set)",
+    "item_condition": "near_mint",
+    "item_value_usd": 55.00,
+    "photos": ["base64...", "base64..."]
+  }
+}
 ```
-✓ Backend Service: Connected
-⚠ Chia Node Connection: Not configured (optional)
+
+---
+
+## Phase 3: Blockchain Commitment
+
+**Status**: `committed`
+
+### What Happens
+Both parties signal serious intent by paying a service fee in XCH. This creates an immutable record of the trade agreement.
+
+### The Commitment
+| Party | Action | Amount |
+|-------|--------|--------|
+| Proposer (Alice) | Pay service fee | ~$1 in XCH |
+| Acceptor (Bob) | Pay service fee | ~$1 in XCH |
+| **Total** | Platform receives | ~$2 in XCH |
+
+### Transaction Details
+Each commitment transaction includes:
+- **Trade ID**: Unique identifier
+- **Asset Summary**: What's being swapped
+- **Participant Addresses**: Both XCH wallets
+- **Timestamp**: Commitment time
+
+### The Memo Format
 ```
+DTREX:COMMIT:12345:PIKACHU_FOR_CHARIZARD:xch1alice...xch1bob...
+```
+
+### Why This Matters
+- **Sunk Cost**: Deters frivolous trades
+- **Blockchain Record**: Immutable proof of agreement
+- **Platform Sustainability**: Funds development
+- **Spam Prevention**: Discourages bad actors
+
+### API Endpoint
+```typescript
+POST /api/rpc
+{
+  "method": "trade_commit",
+  "params": {
+    "trade_id": 12345
+  }
+}
+
+// Returns transaction details for wallet signing
+{
+  "result": {
+    "tx_to_sign": {
+      "amount": 25000000,  // ~$1 in mojos
+      "to_address": "xch1dtrex...",
+      "memo": "DTREX:COMMIT:12345:..."
+    }
+  }
+}
+```
+
+---
+
+## Phase 4: 30-Day Escrow & Swap
+
+**Status**: `escrow`
+
+### What Happens
+The actual exchange of items or XCH occurs during a 30-day window that allows for shipping, receipt, and verification.
+
+### Timeline
+```
+Day 0           Day 7          Day 21         Day 30
+│               │              │              │
+▼               ▼              ▼              ▼
+┌───────────────┬──────────────┬──────────────┐
+│   SHIPPING    │   TRANSIT    │  VERIFICATION│
+│               │              │              │
+│ Mail items    │ Items in     │ Inspect &    │
+│ or lock XCH   │ transit      │ confirm      │
+└───────────────┴──────────────┴──────────────┘
+```
+
+### For Item-for-Item Trades
+1. Both parties ship their items
+2. Tracking numbers uploaded to platform
+3. Receipt confirmed when items arrive
+4. Inspection period for verification
+
+### For XCH-Involved Trades
+1. XCH amount locked in smart coin escrow
+2. Item shipped by other party
+3. Upon receipt confirmation, escrow releases
+4. XCH transferred to recipient's wallet
+
+### Smart Escrow Contract
+```lisp
+; DTREX Escrow Smart Coin
+(mod (
+  TRADE_ID
+  PROPOSER_PUBKEY
+  ACCEPTOR_PUBKEY
+  XCH_AMOUNT
+  ESCROW_END_HEIGHT
+  release_signature
+)
+  ; Release conditions:
+  ; 1. Both parties sign release, OR
+  ; 2. Timeout reached + arbitration
+  
+  (if (verify_signatures release_signature PROPOSER_PUBKEY ACCEPTOR_PUBKEY)
+    (release_to_acceptor XCH_AMOUNT)
+    (if (> CURRENT_HEIGHT ESCROW_END_HEIGHT)
+      (initiate_arbitration)
+      (FAIL)
+    )
+  )
+)
+```
+
+### Shipping Guidelines
+- Use tracked shipping methods
+- Package items securely
+- Upload tracking info within 48 hours of commitment
+- Take photos of packaging process
+
+### API Endpoints
+```typescript
+// Upload tracking information
+POST /api/rpc
+{
+  "method": "trade_add_tracking",
+  "params": {
+    "trade_id": 12345,
+    "carrier": "USPS",
+    "tracking_number": "9400111899223..."
+  }
+}
+
+// Confirm item receipt
+POST /api/rpc
+{
+  "method": "trade_confirm_receipt",
+  "params": {
+    "trade_id": 12345,
+    "item_received": true,
+    "condition_as_described": true
+  }
+}
+```
+
+---
+
+## Phase 5: Multi-Pillar Review & Settlement
+
+**Status**: `completed`
+
+### What Happens
+After both parties confirm satisfaction, the trade is finalized with mutual reviews and a blockchain record.
+
+### The Four Pillars of Review
+
+| Pillar | What It Measures | Scale |
+|--------|------------------|-------|
+| **Timeliness** | How quickly items shipped / XCH transferred | 1-5 ⭐ |
+| **Packaging** | Quality of physical item protection | 1-5 ⭐ |
+| **Value Honesty** | Did item match stated value/condition? | 1-5 ⭐ |
+| **State Accuracy** | Was physical description accurate? | 1-5 ⭐ |
+
+### Review Interface
+```
+┌────────────────────────────────────────────────────────┐
+│         REVIEW YOUR TRADE WITH @charizard_master       │
+├────────────────────────────────────────────────────────┤
+│                                                        │
+│  ⏱️ Timeliness       ★ ★ ★ ★ ★                        │
+│  How quickly did they ship?                           │
+│                                                        │
+│  📦 Packaging        ★ ★ ★ ★ ☆                        │
+│  How well was the item protected?                     │
+│                                                        │
+│  💰 Value Honesty    ★ ★ ★ ★ ★                        │
+│  Did it match the stated value?                       │
+│                                                        │
+│  📋 State Accuracy   ★ ★ ★ ★ ★                        │
+│  Was the description accurate?                        │
+│                                                        │
+│  ┌──────────────────────────────────────────────────┐ │
+│  │ Additional comments (optional):                  │ │
+│  │ Great trade! Card was exactly as described.     │ │
+│  │ Fast shipping, double-sleeved and top-loaded.   │ │
+│  └──────────────────────────────────────────────────┘ │
+│                                                        │
+│             [SUBMIT REVIEW]                            │
+└────────────────────────────────────────────────────────┘
+```
+
+### Reputation Score Calculation
+```
+Overall Score = (
+  Timeliness × 0.20 +
+  Packaging × 0.25 +
+  Value Honesty × 0.30 +
+  State Accuracy × 0.25
+) / 5 × 100
+
+Example: (5×0.20 + 4×0.25 + 5×0.30 + 5×0.25) = 4.75 → 95%
+```
+
+### Final Blockchain Record
+A hash of the complete trade record is saved to the Chia blockchain:
+
+```json
+{
+  "trade_id": 12345,
+  "proposer": "xch1alice...",
+  "acceptor": "xch1bob...",
+  "items_exchanged": {
+    "proposer_gave": "NM Pikachu (Base Set)",
+    "acceptor_gave": "NM Charizard (Base Set)"
+  },
+  "completion_date": "2026-01-04T12:00:00Z",
+  "reviews": {
+    "alice_reviewed_bob": { "avg": 4.75, "comment": "..." },
+    "bob_reviewed_alice": { "avg": 5.0, "comment": "..." }
+  },
+  "final_hash": "sha256:abc123..."
+}
+```
+
+### API Endpoint
+```typescript
+POST /api/rpc
+{
+  "method": "trade_review",
+  "params": {
+    "trade_id": 12345,
+    "timeliness": 5,
+    "packaging": 4,
+    "value_honesty": 5,
+    "state_accuracy": 5,
+    "comment": "Great trade! Card was exactly as described."
+  }
+}
+```
+
+---
+
+## Trade Status Reference
+
+| Status | Description | Next Actions |
+|--------|-------------|--------------|
+| `proposal` | Listed, awaiting offers | Accept offer / Cancel |
+| `matched` | Offer accepted, awaiting commit | Pay fee / Withdraw |
+| `committed` | Fees paid, trade locked | Ship items / Lock XCH |
+| `escrow` | Items in transit / XCH locked | Confirm receipt |
+| `completed` | Trade finished | Leave review |
+| `disputed` | Issue raised | Arbitration |
+| `cancelled` | Trade cancelled | N/A |
+
+---
 
 ## Error Handling
 
-### Backend Not Running
+### Common Issues
 
-**User sees:**
+| Error | Cause | Resolution |
+|-------|-------|------------|
+| `INSUFFICIENT_VERIFICATION` | User not fully verified | Complete verification |
+| `INSUFFICIENT_XCH` | Can't pay commitment fee | Add XCH to wallet |
+| `TRADE_EXPIRED` | 30-day escrow ended | Contact support |
+| `ITEM_MISMATCH` | Item doesn't match description | Open dispute |
+
+### Dispute Resolution
+1. Either party can open a dispute during escrow
+2. Both parties submit evidence (photos, messages)
+3. Community arbitrators review the case
+4. Resolution: Refund, release escrow, or split
+
+---
+
+## Configuration Requirements
+
+### For Full Trading
+- ✅ Backend running (`cargo run`)
+- ✅ Verified account status
+- ✅ Connected Chia wallet
+- ✅ XCH for commitment fees
+
+### For Browsing Only
+- ✅ Backend running
+- ✅ Basic account (email verified)
+- ❌ Wallet not required
+- ❌ Full verification not required
+
+---
+
+## Example: Complete Trade Flow
+
 ```
-❌ Backend Service: Not responding
-  💡 Make sure to run: cd backend && cargo run
+Alice                    DTREX                     Bob
+  │                        │                        │
+  │ CREATE PROPOSAL        │                        │
+  │ "NM Pikachu, $50"      │                        │
+  │───────────────────────▶│                        │
+  │                        │                        │
+  │                        │   BROWSE PROPOSALS     │
+  │                        │◀───────────────────────│
+  │                        │                        │
+  │                        │   MAKE OFFER           │
+  │                        │   "NM Charizard, $55"  │
+  │                        │◀───────────────────────│
+  │                        │                        │
+  │ OFFER NOTIFICATION     │                        │
+  │◀───────────────────────│                        │
+  │                        │                        │
+  │ ACCEPT OFFER           │                        │
+  │───────────────────────▶│                        │
+  │                        │                        │
+  │ PAY FEE ($1 XCH)       │   PAY FEE ($1 XCH)    │
+  │───────────────────────▶│◀───────────────────────│
+  │                        │                        │
+  │ SHIP PIKACHU           │   SHIP CHARIZARD      │
+  │───────────────────────▶│◀───────────────────────│
+  │                        │                        │
+  │ CONFIRM RECEIPT        │   CONFIRM RECEIPT     │
+  │───────────────────────▶│◀───────────────────────│
+  │                        │                        │
+  │ LEAVE REVIEW           │   LEAVE REVIEW        │
+  │───────────────────────▶│◀───────────────────────│
+  │                        │                        │
+  │     TRADE COMPLETE - BLOCKCHAIN RECORD SAVED    │
+  │                        │                        │
 ```
-
-**Wallet Connect Button:**
-- Disabled/Grayed out
-- Clicking shows error: "Backend service is not running. Please start the backend before connecting your wallet."
-
-**What user should do:**
-```bash
-# In separate terminal
-cd backend
-cargo run
-```
-
-### Chia Node Not Configured
-
-**User sees:**
-```
-⚠ Chia Node Connection: Not configured (optional)
-  💡 You can still create contracts without a Chia node connection
-```
-
-**Can user still proceed?**
-- Yes - wallet can connect and contracts can be created
-- No blockchain deployment possible until node is configured
-- Use the "Chia Connection" card below to configure it
-
-**What user should do:**
-1. Have a Chia node running or get RPC URL
-2. For mainnet HTTPS setup with SSL certificates, see **[SSL_SETUP_GUIDE.md](SSL_SETUP_GUIDE.md)** for detailed frontend configuration instructions
-3. Click "Edit" on Chia Connection card
-4. Enter RPC URL
-5. Click "Test Connection"
-
-## Component Architecture
-
-### New Components Added
-
-#### `useAppConfiguration` Hook
-```typescript
-import { useAppConfiguration } from "../hooks/useAppConfiguration";
-
-const config = useAppConfiguration();
-// Returns:
-// {
-//   backendReady: boolean
-//   backendError?: string
-//   chiaNodeConnected: boolean
-//   chiaNodeError?: string
-//   walletConnectable: boolean
-// }
-```
-
-**Features:**
-- Auto-validates every 30 seconds
-- Returns cached results between checks
-- Provides specific error messages
-
-#### `ConfigurationStatus` Component
-```tsx
-<ConfigurationStatus />
-```
-
-**Features:**
-- Displays status of backend and Chia node
-- Shows helpful hints when services aren't ready
-- Automatically hides when everything is ready
-- Located at top of Home page
-
-#### Updated `WalletConnector` Component
-- Now uses `useAppConfiguration` hook
-- Prevents wallet connection if backend not ready
-- Shows helpful error message with instructions
-
-## Best Practices for Users
-
-### ✅ Do This
-
-1. **Start services in order:**
-   ```bash
-   # Terminal 1: Backend
-   cd backend && cargo run
-   
-   # Terminal 2: Frontend (after backend is ready)
-   cd frontend && npm run dev
-   ```
-
-2. **Wait for green status indicators** before attempting wallet connection
-
-3. **Check backend logs** if wallet connection fails:
-   ```bash
-   # Look for: "Server listening on 127.0.0.1:8080"
-   ```
-
-4. **Use Configuration Status panel** to diagnose issues
-
-### ❌ Don't Do This
-
-1. ❌ Try to connect wallet while backend is starting
-2. ❌ Assume Chia node is required for all operations
-3. ❌ Ignore error messages in Configuration Status
-4. ❌ Start frontend before backend is fully running
-
-## Development Notes
-
-### Adding Configuration Requirements
-
-To add a new configuration check:
-
-1. **Add to `useAppConfiguration` hook:**
-   ```typescript
-   // Check 3: New service
-   try {
-     const response = await api.get("/new-endpoint");
-     if (response.status === 200) {
-       newServiceReady = true;
-     }
-   } catch (err) {
-     newServiceError = "Service not available";
-   }
-   ```
-
-2. **Update `AppConfiguration` interface:**
-   ```typescript
-   export interface AppConfiguration {
-     backendReady: boolean;
-     newServiceReady: boolean;  // Add here
-     // ...
-   }
-   ```
-
-3. **Add to `ConfigurationStatus` component:**
-   ```tsx
-   {config.backendReady && (
-     <div>
-       {/* New service status UI */}
-     </div>
-   )}
-   ```
-
-### Testing Configuration Checks
-
-```bash
-# Test without backend running
-# Should show red "Backend Service: Not responding"
-
-# Start backend
-cd backend && cargo run
-
-# Should immediately show green "Backend Service: Connected"
-
-# Test wallet connection attempts
-# Should fail gracefully with helpful error message
-```
-
-## Troubleshooting
-
-### Wallet Won't Connect
-
-**Check:**
-1. Is backend running? (`curl http://localhost:8080/health`)
-2. Look at Configuration Status panel
-3. Check browser console for errors
-
-**Solution:**
-```bash
-# In new terminal
-cd backend
-cargo run
-
-# Wait for: "Server listening on 127.0.0.1:8080"
-# Then try wallet connection again
-```
-
-### Configuration Status Not Updating
-
-**Check:**
-1. Is frontend connected to correct backend URL?
-2. Browser console errors?
-3. Network tab showing failed requests?
-
-**Solution:**
-1. Hard refresh: `Ctrl+Shift+R` (Windows/Linux) or `Cmd+Shift+R` (Mac)
-2. Check backend is on `localhost:8080`
-3. Restart both frontend and backend
-
-### Wallet Connected but Operations Failing
-
-**Check:**
-1. Is Chia node connected? (See Configuration Status)
-2. Do you need blockchain operations?
-3. Check wallet app - is it still connected?
-
-**Solution:**
-1. For contract creation only: Chia node not needed
-2. For blockchain operations: Configure Chia node RPC
-3. Re-connect wallet if needed
-
-## Future Enhancements
-
-Potential configuration checks to add:
-- SSL certificate validation for production
-- Database schema version check
-- Blockchain network selection (testnet vs mainnet)
-- Minimum balance requirements
-- API rate limit status
-- Puzzle compilation service health

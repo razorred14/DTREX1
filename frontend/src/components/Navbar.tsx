@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { healthCheck, getChiaNodeStatus, ChiaNodeStatus } from "../api/client";
 import { useAuth } from "../contexts/AuthContext";
+import WalletConnectStatus from "./WalletConnectStatus";
 
 export default function Navbar() {
   const [isHealthy, setIsHealthy] = useState<boolean | null>(null);
@@ -23,9 +24,9 @@ export default function Navbar() {
       <div className="container mx-auto px-4 py-4">
         <div className="flex justify-between items-center">
           <Link to="/" className="flex items-center space-x-2">
-            <span className="text-2xl font-bold text-chia-green">🌱</span>
+            <span className="text-2xl font-bold text-chia-green">🔄</span>
             <span className="text-xl font-bold text-gray-800">
-              Chia Contracts
+              DTREX
             </span>
           </Link>
 
@@ -96,11 +97,21 @@ export default function Navbar() {
 
             {isAuthenticated ? (
               <>
+                {/* Wallet Connect Status - Only shown when logged in */}
+                <WalletConnectStatus />
+
                 <Link
-                  to="/contracts"
+                  to="/trades"
                   className="text-gray-700 hover:text-chia-green transition-colors"
                 >
-                  My Contracts
+                  Browse Trades
+                </Link>
+
+                <Link
+                  to="/my-trades"
+                  className="text-gray-700 hover:text-chia-green transition-colors"
+                >
+                  My Trades
                 </Link>
 
                 <Link
@@ -111,13 +122,6 @@ export default function Navbar() {
                 </Link>
 
                 <Link
-                  to="/wallet-view"
-                  className="text-gray-700 hover:text-chia-green transition-colors"
-                >
-                  Wallet RPC View
-                </Link>
-
-                <Link
                   to="/settings"
                   className="text-gray-700 hover:text-chia-green transition-colors"
                 >
@@ -125,7 +129,7 @@ export default function Navbar() {
                 </Link>
 
                 <Link to="/create" className="btn-primary">
-                  Create Contract
+                  New Trade
                 </Link>
 
                 <div className="flex items-center space-x-4 border-l pl-4">
@@ -142,6 +146,12 @@ export default function Navbar() {
               </>
             ) : (
               <>
+                <Link
+                  to="/trades"
+                  className="text-gray-700 hover:text-chia-green transition-colors"
+                >
+                  Browse Trades
+                </Link>
                 <Link
                   to="/login"
                   className="text-gray-700 hover:text-chia-green transition-colors"

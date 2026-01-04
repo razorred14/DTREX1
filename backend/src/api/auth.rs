@@ -100,10 +100,21 @@ pub async fn rpc_register(mm: ModelManager, params: Option<Value>) -> Result<Val
         },
     )
     .await
-    .map_err(|e| RpcError {
-        code: 4000,
-        message: format!("Failed to create user: {}", e),
-        data: None,
+    .map_err(|e| {
+        let err_str = e.to_string();
+        if err_str.contains("duplicate key") || err_str.contains("unique constraint") {
+            RpcError {
+                code: 4002,
+                message: "Username already exists".to_string(),
+                data: None,
+            }
+        } else {
+            RpcError {
+                code: 4000,
+                message: format!("Failed to create user: {}", e),
+                data: None,
+            }
+        }
     })?;
 
     Ok(json!({

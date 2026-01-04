@@ -1,340 +1,284 @@
-# Configuration Checklist & Quick Start
+# DTREX Quick Start Guide
+
+Get up and running with the Decentralized Trade Exchange in under 10 minutes.
 
 ## ✅ Pre-Flight Checklist
 
-Before opening the application, verify:
+Before starting, verify your system has:
 
-- [ ] PostgreSQL 16 is installed
-  ```bash
-  postgres --version
-  # Expected: postgres (PostgreSQL) 16.x ...
-  ```
+### Required
+```bash
+# PostgreSQL 16+
+postgres --version
+# Expected: postgres (PostgreSQL) 16.x
 
-- [ ] PostgreSQL is running
-  ```bash
-  # Linux
-  sudo systemctl status postgresql
-  
-  # macOS
-  brew services list | grep postgres
-  ```
+# Rust 1.70+
+rustc --version && cargo --version
+# Expected: rustc 1.70+, cargo 1.70+
 
-- [ ] Database is initialized
-  ```bash
-  psql -U chia_user -d chia_contracts -c "SELECT 1;"
-  # Expected: (1 row)
-  ```
+# Node.js 18+
+node --version && npm --version
+# Expected: v18+, npm 8+
+```
 
-- [ ] Rust & Cargo are installed
-  ```bash
-  rustc --version && cargo --version
-  # Expected: rustc 1.70+, cargo 1.70+
-  ```
+### Optional (for blockchain features)
+- Chia node running (mainnet or testnet)
+- Chia wallet with XCH for trade fees
 
-- [ ] Node.js & npm are installeu
-  ```bash
-  node --version && npm --version
-  # Expected: node 18+, npm 8+
-  ```
+---
 
-## 🚀 Quick Start (Correct Order)
+## 🚀 Quick Start
 
-### Step 1: Terminal 1 - Start Backend
+### Step 1: Start PostgreSQL
+
+```bash
+# macOS
+brew services start postgresql@16
+
+# Linux
+sudo systemctl start postgresql
+
+# Verify it's running
+psql -U postgres -c "SELECT 1;"
+```
+
+### Step 2: Initialize Database
+
+```bash
+cd backend
+
+# Create database and user
+psql -U postgres -f sql/00-recreate-db.sql
+
+# Create tables
+psql -U chia_user -d chia_contracts -f sql/01-create-schema.sql
+```
+
+### Step 3: Configure Backend
+
+```bash
+cd backend
+
+# Create environment file
+cat > .env << 'EOF'
+DATABASE_URL=postgres://chia_user:chia_password@localhost:5432/chia_contracts
+TOKEN_SECRET=your-secret-key-change-this-min-32-chars!!
+EOF
+```
+
+### Step 4: Start Backend (Terminal 1)
+
 ```bash
 cd backend
 cargo run
 ```
 
-✅ **Wait for this message:**
+✅ **Wait for:**
 ```
-2025-12-28T19:54:08.093529Z  INFO chia_contract_backend: Server listening on 127.0.0.1:8080
+INFO chia_contract_backend: Server listening on 127.0.0.1:8080
 ```
 
-### Step 2: Terminal 2 - Start Frontend
+### Step 5: Start Frontend (Terminal 2)
+
 ```bash
 cd frontend
+npm install
 npm run dev
 ```
 
-✅ **Wait for this message:**
+✅ **Wait for:**
 ```
 ➜  Local:   http://127.0.0.1:5173/
 ```
 
-### Step 3: Open Browser
+### Step 6: Open Browser
+
+Navigate to `http://127.0.0.1:5173`
+
+---
+
+## 📊 System Status Check
+
+When everything is running correctly, you'll see:
+
 ```
-http://127.0.0.1:5173
+┌─────────────────────────────────────────────┐
+│          DTREX SYSTEM STATUS               │
+├─────────────────────────────────────────────┤
+│  ✓ Backend Service     Connected           │
+│  ✓ Database            Connected           │
+│  ○ Chia Node           Not configured      │
+│  ○ Wallet              Not connected       │
+└─────────────────────────────────────────────┘
 ```
 
-## 📊 What You Should See
+**Note:** Chia node and wallet are optional for browsing and account setup. They're only required for committing to trades.
 
-### Configuration Status Panel (Home page)
+---
 
-**All Services Ready:**
+## 👤 First-Time User Flow
+
+### 1. Create Account
+- Click "Sign Up" in the top navigation
+- Enter username, email, and password
+- You now have an **Unverified** account
+
+### 2. Complete Verification (Required for Trading)
+
+To participate in trades, you must verify your identity:
+
+| Step | What | How |
+|------|------|-----|
+| **Email** | Verify email address | Click link sent to your email |
+| **Phone** | Verify phone number | Enter SMS code |
+| **ID** | Upload driver's license | Take photo or upload scan |
+
+After completing all three, you receive **Verified Status** ✓
+
+### 3. Connect Wallet (Optional)
+- Navigate to Settings → Wallet
+- Enter your Chia RPC URL
+- Optionally upload SSL certificates
+- Click "Connect"
+
+### 4. Browse Trade Proposals
+- Go to "Browse Trades" to see open proposals
+- Filter by category, value range, or location
+- No verification needed to browse
+
+### 5. Create Your First Trade
+- Requires **Verified Status**
+- Click "Create Trade Proposal"
+- Upload photos and describe your item
+- Set your asking price (in USD, converted to XCH)
+- Specify what you'll accept in trade
+
+---
+
+## 🔧 Troubleshooting
+
+### Backend won't start
+
+**Error:** `connection refused` to database
+```bash
+# Check PostgreSQL is running
+pg_isready -h localhost -p 5432
+
+# If not, start it
+brew services start postgresql@16  # macOS
+sudo systemctl start postgresql     # Linux
 ```
-✓ Backend Service: Connected
-✓ Chia Node Connection: Connected
+
+**Error:** `TOKEN_SECRET must be at least 32 characters`
+```bash
+# Edit .env file
+nano backend/.env
+# Make TOKEN_SECRET longer
 ```
-→ Status panel is HIDDEN (all good!)
 
-**Backend Missing:**
-```
-✗ Backend Service: Not responding
-  💡 Make sure to run: cd backend && cargo run
-
-⚠ Chia Node Connection: Not configured (optional)
-  💡 You can still create contracts without...
-```
-→ Fix: Run backend, panel auto-updates
-
-**Chia Node Missing (but optional):**
-```
-✓ Backend Service: Connected
-
-⚠ Chia Node Connection: Not configured (optional)
-  💡 You can still create contracts without...
-```
-→ OK to proceed - Chia node is optional for contract creation
-
-## 🎯 Use Case Checklist
-
-### I want to create contracts only
-- [ ] Start PostgreSQL
-- [ ] Start backend (`cargo run`)
-- [ ] Start frontend (`npm run dev`)
-- [ ] Login/Register
-- [ ] Configuration Status shows:
-  - ✓ Backend Service
-  - ⚠ Chia Node (optional - can proceed without)
-- [ ] Click "Create Contract"
-
-### I want to deploy contracts to blockchain
-- [ ] All above steps completed
-- [ ] Chia node is running OR
-- [ ] Have Chia RPC URL (e.g., `https://localhost:8555`)
-- [ ] Click "Edit" on Chia Connection card
-- [ ] Enter RPC URL and test
-- [ ] Configuration Status shows:
-  - ✓ Backend Service
-  - ✓ Chia Node Connection
-- [ ] Create and deploy contracts
-
-### I want to connect my wallet only
-- [ ] Start PostgreSQL
-- [ ] Start backend (`cargo run`)
-- [ ] Start frontend (`npm run dev`)
-- [ ] Login/Register
-- [ ] Configuration Status shows:
-  - ✓ Backend Service
-- [ ] Click "Connect Wallet"
-- [ ] Scan QR code with Chia Signer app
-- [ ] Click "Request Public Key"
-
-## 🐛 Troubleshooting Checklist
-
-### Wallet won't connect
-- [ ] Backend is running? Check Terminal 2
-  - If not: `cd backend && cargo run`
-- [ ] Backend shows "Server listening"?
-  - If not: Wait 10 seconds or restart
-- [ ] Configuration Status shows ✓ Backend?
-  - If not: Refresh page (`Ctrl+R`)
-- [ ] Try again
-
-### Backend fails to start
-- [ ] PostgreSQL running? Run:
-  ```bash
-  sudo systemctl start postgresql
-  ```
-- [ ] DATABASE_URL correct in `.env`?
-  ```bash
-  cat backend/.env | grep DATABASE_URL
-  ```
-- [ ] Database exists? Run:
-  ```bash
-  psql -U chia_user -d chia_contracts -c "SELECT 1;"
-  ```
-- [ ] Port 8080 in use? Check:
-  ```bash
-  lsof -i :8080
-  # If in use: kill -9 <PID>
-  ```
-
-### Frontend won't start
-- [ ] Node.js 18+? Check:
-  ```bash
-  node --version
-  ```
-- [ ] npm dependencies installed?
-  ```bash
-  npm install
-  ```
-- [ ] Port 5173 in use? Check:
-  ```bash
-  lsof -i :5173
-  ```
-- [ ] .env correct?
-  ```bash
-  cat frontend/.env
-  ```
-
-### Configuration Status not updating
-- [ ] Hard refresh: `Ctrl+Shift+R` (Windows) or `Cmd+Shift+R` (Mac)
-- [ ] Backend still running? Check log
-- [ ] Network error in console? (F12)
-- [ ] Try: Stop and restart frontend
-
-### Cannot create contracts
-- [ ] Logged in? See username in navbar
-- [ ] Configuration Status all green?
-- [ ] Browser console errors? (F12)
-- [ ] Refresh page
-- [ ] Clear browser cache: `Ctrl+Shift+Delete`
-
-## 📋 System Health Check
-
-Run this to verify everything:
+### Frontend shows "Disconnected"
 
 ```bash
-#!/bin/bash
-
-echo "🔍 Checking Chia Contract App Setup..."
-echo ""
-
-# Check PostgreSQL
-echo "1. PostgreSQL:"
-if psql --version &> /dev/null; then
-    echo "   ✓ PostgreSQL installed: $(psql --version)"
-else
-    echo "   ✗ PostgreSQL not found"
-fi
-
-# Check database
-echo ""
-echo "2. Database:"
-if psql -U chia_user -d chia_contracts -c "SELECT 1;" &> /dev/null; then
-    echo "   ✓ Database connected"
-else
-    echo "   ✗ Database connection failed"
-fi
-
-# Check Rust
-echo ""
-echo "3. Rust/Cargo:"
-if rustc --version &> /dev/null; then
-    echo "   ✓ $(rustc --version)"
-else
-    echo "   ✗ Rust not found"
-fi
-
-# Check Node.js
-echo ""
-echo "4. Node.js:"
-if node --version &> /dev/null; then
-    echo "   ✓ $(node --version)"
-else
-    echo "   ✗ Node.js not found"
-fi
-
-# Check npm
-echo ""
-echo "5. npm:"
-if npm --version &> /dev/null; then
-    echo "   ✓ npm $(npm --version)"
-else
-    echo "   ✗ npm not found"
-fi
-
-# Check ports
-echo ""
-echo "6. Port Availability:"
-if ! lsof -i :8080 &> /dev/null; then
-    echo "   ✓ Port 8080 available (backend)"
-else
-    echo "   ✗ Port 8080 in use"
-fi
-
-if ! lsof -i :5173 &> /dev/null; then
-    echo "   ✓ Port 5173 available (frontend)"
-else
-    echo "   ✗ Port 5173 in use"
-fi
-
-echo ""
-echo "✅ Check complete!"
-```
-
-Save as `check-setup.sh` and run:
-```bash
-chmod +x check-setup.sh
-./check-setup.sh
-```
-
-## 🔧 Common Commands
-
-```bash
-# Start everything (in separate terminals)
-cd backend && cargo run           # Terminal 1
-cd frontend && npm run dev        # Terminal 2
-
-# Stop services
-Ctrl+C (in each terminal)
-
-# Reset database
-sudo -u postgres psql -f backend/sql/00-recreate-db.sql
-psql -U chia_user -d chia_contracts -f backend/sql/01-create-schema.sql
-
-# Clear browser cache
-Ctrl+Shift+Delete
-
-# Hard refresh
-Ctrl+Shift+R (Windows/Linux)
-Cmd+Shift+R (Mac)
-
-# Check backend health
+# Verify backend is running
 curl http://localhost:8080/health
+# Should return: {"status":"ok"}
 
-# Check Chia node status
-curl http://localhost:8080/chia/node/status
-
-# View backend logs
-# In the backend terminal - all logs displayed
-
-# View frontend logs
-# In the frontend terminal - all logs displayed
+# If not running, start it
+cd backend && cargo run
 ```
 
-## 📞 When to Check What
+### Database connection failed
 
-| Symptom | Check | Solution |
-|---------|-------|----------|
-| "Backend not responding" in Status | Backend logs | Start backend |
-| Wallet won't connect | Browser console (F12) | Refresh, check backend |
-| Can't create contract | Backend logs | Check RPC endpoint |
-| Slow response | System resources | Restart services |
-| Configuration Status not updating | Browser console | Hard refresh |
-| Database connection error | PostgreSQL status | Start PostgreSQL |
+```bash
+# Check credentials in .env match database setup
+cat backend/.env
 
-## ✨ Success Indicators
+# Verify user can connect
+psql -U chia_user -d chia_contracts -c "SELECT 1;"
+```
 
-You'll know everything is working when:
+---
 
-1. ✅ Backend starts with: "Server listening on 127.0.0.1:8080"
-2. ✅ Frontend starts with: "Local: http://127.0.0.1:5173/"
-3. ✅ Configuration Status is hidden (all good!)
-4. ✅ Can login/register
-5. ✅ Can create a contract
-6. ✅ Wallet connects on command
-7. ✅ No errors in browser console (F12)
-8. ✅ No errors in backend logs
+## 🎯 Use Case Quick Reference
 
-## 🎓 Next Steps
+### Just Browsing
+| Need | Status |
+|------|--------|
+| Backend | ✅ Required |
+| Database | ✅ Required |
+| Account | ✅ Basic (email only) |
+| Verification | ❌ Not needed |
+| Wallet | ❌ Not needed |
+| Chia Node | ❌ Not needed |
 
-After setup is complete:
+### Creating Trade Proposals
+| Need | Status |
+|------|--------|
+| Backend | ✅ Required |
+| Database | ✅ Required |
+| Account | ✅ Verified |
+| Verification | ✅ Email + Phone + ID |
+| Wallet | ❌ Not needed |
+| Chia Node | ❌ Not needed |
 
-1. Read [WORKFLOW.md](WORKFLOW.md) for detailed workflow
-2. Check [WORKFLOW_DIAGRAMS.md](WORKFLOW_DIAGRAMS.md) for visual guides
-3. Review [README.md](README.md) for API documentation
-4. Create your first contract
-5. Test wallet connection
-6. Deploy a contract to blockchain (optional)
+### Committing to Trades
+| Need | Status |
+|------|--------|
+| Backend | ✅ Required |
+| Database | ✅ Required |
+| Account | ✅ Verified |
+| Verification | ✅ Email + Phone + ID |
+| Wallet | ✅ With XCH balance |
+| Chia Node | ✅ For transaction signing |
+
+---
+
+## 🧪 Test Account
+
+For development and testing, a demo account is pre-created:
+
+```
+Username: demo1
+Password: welcome
+Status: Unverified (complete verification to trade)
+```
+
+---
+
+## 📁 Project Structure
+
+```
+DTREX1/
+├── backend/           # Rust + Axum API server
+│   ├── src/
+│   │   ├── api/       # RPC endpoints
+│   │   ├── model/     # Database models (User, Trade, Review)
+│   │   └── ...
+│   └── sql/           # Database migrations
+├── frontend/          # React + TypeScript UI
+│   ├── src/
+│   │   ├── api/       # API client
+│   │   ├── pages/     # Trade, Profile, Settings pages
+│   │   └── components/ # Reusable UI components
+│   └── ...
+└── puzzles/           # Chia CLVM puzzles for escrow
+```
+
+---
+
+## 🔗 Next Steps
+
+1. **[WORKFLOW.md](./WORKFLOW.md)** - Understand the 5-phase trade process
+2. **[AUTHENTICATION.md](./AUTHENTICATION.md)** - Identity verification details
+3. **[SSL_SETUP_GUIDE.md](./SSL_SETUP_GUIDE.md)** - Secure Chia node connection
+4. **[README.md](./README.md)** - Full platform documentation
+
+---
+
+## 💡 Tips
+
+- **Start small**: Your first trade should be a low-value item to learn the process
+- **Build reputation**: Successful trades increase your trust score
+- **Communicate**: Use the trade chat to coordinate shipping details
+- **Document everything**: Take photos of items before and during packaging
+- **Use tracked shipping**: Always get a tracking number for physical items
