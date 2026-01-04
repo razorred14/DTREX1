@@ -1,0 +1,47 @@
+;; Multi-signature contract puzzle
+;; This puzzle requires all specified participants to sign before funds can be spent
+;;
+;; Parameters:
+;;   PUBKEYS: List of BLS public keys that must sign
+;;   TERMS_HASH: SHA256 hash of the contract terms (PDF/text)
+;;   REQUIRED_SIGS: Number of signatures required (for m-of-n scenarios)
+;;   CONDITIONS: Spending conditions (amount, destination, etc.)
+
+(mod (
+    PUBKEYS         ; List of participant public keys
+    TERMS_HASH      ; SHA256 hash of contract document
+    REQUIRED_SIGS   ; Number of required signatures
+    solution        ; Solution provided when spending
+  )
+
+  ;; Include standard libraries
+  (include condition_codes.clib)
+  (include sha256tree.clib)
+
+  ;; Helper to check if all required signatures are present
+  (defun check-signatures (pubkeys sig-count required)
+    (if (> required sig-count)
+        (x "Insufficient signatures")
+        1
+    )
+  )
+
+  ;; Main puzzle logic
+  (defun main (pubkeys terms-hash required-sigs conditions)
+    
+    ;; Verify the terms hash is embedded in the puzzle
+    (if (not (= (sha256 terms-hash) terms-hash))
+        (x "Terms hash mismatch")
+        
+        ;; Return the spending conditions
+        ;; In a real implementation, this would include:
+        ;; - AGG_SIG_ME for each required public key
+        ;; - CREATE_COIN for outputs
+        ;; - Additional assertions
+        conditions
+    )
+  )
+
+  ;; Entry point
+  (main PUBKEYS TERMS_HASH REQUIRED_SIGS solution)
+)

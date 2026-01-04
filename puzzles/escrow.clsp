@@ -1,0 +1,53 @@
+;; Escrow contract puzzle
+;; Holds funds until all parties approve release
+;;
+;; Parameters:
+;;   BUYER_PUBKEY: Public key of the buyer
+;;   SELLER_PUBKEY: Public key of the seller
+;;   ARBITER_PUBKEY: Public key of the arbiter (optional)
+;;   TERMS_HASH: Contract terms hash
+;;   AMOUNT: Escrowed amount
+
+(mod (
+    BUYER_PUBKEY
+    SELLER_PUBKEY
+    ARBITER_PUBKEY
+    TERMS_HASH
+    solution
+  )
+
+  (include condition_codes.clib)
+
+  ;; Solution structure: (action destination)
+  ;; action: 1=release to seller, 2=refund to buyer, 3=arbiter decision
+  
+  (defun-inline main (buyer seller arbiter terms-hash (action destination))
+    
+    ;; Check action type
+    (if (= action 1)
+        ;; Release to seller - requires buyer and seller signatures
+        (list
+          (list AGG_SIG_ME buyer (sha256 "release"))
+          (list AGG_SIG_ME seller (sha256 "release"))
+          (list CREATE_COIN destination (amount))
+        )
+        
+        (if (= action 2)
+            ;; Refund to buyer - requires seller agreement
+            (list
+              (list AGG_SIG_ME buyer (sha256 "refund"))
+              (list AGG_SIG_ME seller (sha256 "refund"))
+              (list CREATE_COIN destination (amount))
+            )
+            
+            ;; Arbiter decision
+            (list
+              (list AGG_SIG_ME arbiter (sha256 "arbiter"))
+              (list CREATE_COIN destination (amount))
+            )
+        )
+    )
+  )
+
+  (main BUYER_PUBKEY SELLER_PUBKEY ARBITER_PUBKEY TERMS_HASH solution)
+)

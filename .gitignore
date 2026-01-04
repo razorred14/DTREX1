@@ -1,0 +1,31 @@
+# Rust
+backend/target/
+**/*.rs.bk
+Cargo.lock
+../../Cargo.lock
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Storage files
+backend/storage/contracts/
+backend/storage/metadata/
+backend/ssl/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+.env
+backend/storage/
+backend/ssl/
+*.db
+*.db-shm
+*.db-wal

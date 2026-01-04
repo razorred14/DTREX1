@@ -1,0 +1,25 @@
+mod contract;
+mod file;
+mod user;
+
+pub use contract::*;
+pub use file::*;
+pub use user::*;
+
+use crate::store::Db;
+
+/// ModelManager - holds resources needed by Model layer
+#[derive(Clone)]
+pub struct ModelManager {
+    db: Db,
+}
+
+impl ModelManager {
+    pub fn new(db: Db) -> Self {
+        Self { db }
+    }
+
+    pub fn db(&self) -> &Db {
+        &self.db
+    }
+}

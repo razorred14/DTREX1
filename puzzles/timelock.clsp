@@ -1,0 +1,34 @@
+;; Time-locked contract puzzle
+;; Funds can only be spent after a specific block height
+;;
+;; Parameters:
+;;   PUBKEY: Public key of the authorized spender
+;;   TERMS_HASH: Contract terms hash
+;;   RELEASE_HEIGHT: Block height when funds become spendable
+;;   AMOUNT: Amount locked in the contract
+
+(mod (
+    PUBKEY
+    TERMS_HASH
+    RELEASE_HEIGHT
+    solution
+  )
+
+  (include condition_codes.clib)
+
+  (defun-inline main (pubkey terms-hash release-height conditions)
+    
+    ;; Assert current block height is >= release height
+    (list
+      (list ASSERT_HEIGHT_RELATIVE release-height)
+      
+      ;; Require signature from authorized pubkey
+      (list AGG_SIG_ME pubkey (sha256tree conditions))
+      
+      ;; Return the spending conditions
+      conditions
+    )
+  )
+
+  (main PUBKEY TERMS_HASH RELEASE_HEIGHT solution)
+)
