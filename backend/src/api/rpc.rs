@@ -271,6 +271,7 @@ struct TradeWithUser {
     #[serde(flatten)]
     trade: crate::model::Trade,
     proposer: Option<UserPublicInfo>,
+    acceptor: Option<UserPublicInfo>,
 }
 
 /// List open trade proposals (public) - enriched with user info
@@ -291,7 +292,12 @@ async fn rpc_trade_list_proposals(mm: ModelManager, params: Option<Value>) -> Re
     let mut trades_with_users = Vec::new();
     for trade in trades {
         let proposer = get_user_public_info(mm.db(), trade.proposer_id).await;
-        trades_with_users.push(TradeWithUser { trade, proposer });
+        let acceptor = if let Some(acceptor_id) = trade.acceptor_id {
+            get_user_public_info(mm.db(), acceptor_id).await
+        } else {
+            None
+        };
+        trades_with_users.push(TradeWithUser { trade, proposer, acceptor });
     }
     
     Ok(json!({ "trades": trades_with_users }))
@@ -345,7 +351,12 @@ async fn rpc_trade_get_public(mm: ModelManager, params: Option<Value>) -> Result
     })?;
     
     let proposer = get_user_public_info(mm.db(), trade.proposer_id).await;
-    let trade_with_user = TradeWithUser { trade, proposer };
+    let acceptor = if let Some(acceptor_id) = trade.acceptor_id {
+        get_user_public_info(mm.db(), acceptor_id).await
+    } else {
+        None
+    };
+    let trade_with_user = TradeWithUser { trade, proposer, acceptor };
     
     Ok(json!({ "trade": trade_with_user }))
 }
@@ -392,9 +403,14 @@ async fn rpc_trade_get(mm: ModelManager, ctx: Ctx, params: Option<Value>) -> Res
         data: None,
     })?;
     
-    // Enrich with proposer info
+    // Enrich with proposer and acceptor info
     let proposer = get_user_public_info(mm.db(), trade.proposer_id).await;
-    let trade_with_user = TradeWithUser { trade, proposer };
+    let acceptor = if let Some(acceptor_id) = trade.acceptor_id {
+        get_user_public_info(mm.db(), acceptor_id).await
+    } else {
+        None
+    };
+    let trade_with_user = TradeWithUser { trade, proposer, acceptor };
     
     Ok(json!({ "trade": trade_with_user }))
 }

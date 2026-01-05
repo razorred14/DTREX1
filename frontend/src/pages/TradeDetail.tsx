@@ -158,6 +158,22 @@ export default function TradeDetail() {
                 </span>
               )}
             </div>
+            
+            {/* Acceptor Info - show when matched */}
+            {trade.acceptor_id && trade.acceptor && (
+              <div className="flex items-center gap-2 mt-2 flex-wrap bg-purple-50 px-3 py-2 rounded-lg border border-purple-200">
+                <span className="text-purple-700 font-medium">Matched with</span>
+                <span className="font-semibold text-purple-900">
+                  {trade.acceptor.username}
+                </span>
+                <VerificationBadge status={trade.acceptor.verification_status} />
+                <span className="text-sm text-purple-600 flex items-center gap-1">
+                  • ⭐ {trade.acceptor.reputation_score.toFixed(1)}
+                  <span className="text-purple-400">|</span>
+                  {trade.acceptor.total_trades} trade{trade.acceptor.total_trades !== 1 ? 's' : ''} completed
+                </span>
+              </div>
+            )}
           </div>
         </div>
 

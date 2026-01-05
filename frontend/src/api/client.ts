@@ -70,6 +70,7 @@ export interface Trade {
   
   // Proposer info (enriched from backend)
   proposer?: UserPublicInfo;
+  acceptor?: UserPublicInfo;
   
   // Proposer's item
   proposer_item_title: string;

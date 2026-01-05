@@ -332,6 +332,7 @@ impl TransactionBmc {
     
     /// Confirm a transaction (called after blockchain verification)
     pub async fn confirm(_ctx: &Ctx, mm: &ModelManager, tx_id: &str, coin_id: &str, confirmations: i32) -> Result<()> {
+        // Update transaction status
         let result = sqlx::query(
             "UPDATE trade_transactions 
              SET status = 'confirmed', coin_id = $1, confirmations = $2, confirmed_at = NOW()
@@ -346,6 +347,67 @@ impl TransactionBmc {
         
         if result.rows_affected() == 0 {
             return Err(Error::NotFoundMsg("Transaction not found or already confirmed".to_string()));
+        }
+        
+        // Get the trade_id for this transaction
+        let trade_info: Option<(i64, String)> = sqlx::query_as(
+            "SELECT trade_id, tx_type FROM trade_transactions WHERE tx_id = $1"
+        )
+        .bind(tx_id)
+        .fetch_optional(mm.pool())
+        .await
+        .map_err(|e: sqlx::Error| Error::Database(e.to_string()))?;
+        
+        if let Some((trade_id, tx_type)) = trade_info {
+            // Only check for commitment fee transactions
+            if tx_type == "commitment_fee" {
+                // Check if both parties have confirmed commitment fees
+                Self::check_and_update_trade_commitment(mm, trade_id).await?;
+            }
+        }
+        
+        Ok(())
+    }
+    
+    /// Check if both parties have confirmed commitment fees and update trade status
+    async fn check_and_update_trade_commitment(mm: &ModelManager, trade_id: i64) -> Result<()> {
+        // Count confirmed commitment fees for this trade
+        let confirmed_count: (i64,) = sqlx::query_as(
+            "SELECT COUNT(DISTINCT user_id) FROM trade_transactions 
+             WHERE trade_id = $1 
+             AND tx_type = 'commitment_fee' 
+             AND status = 'confirmed'"
+        )
+        .bind(trade_id)
+        .fetch_one(mm.pool())
+        .await
+        .map_err(|e: sqlx::Error| Error::Database(e.to_string()))?;
+        
+        // If both parties have confirmed commitment fees, update trade to committed and start escrow
+        if confirmed_count.0 >= 2 {
+            sqlx::query(
+                "UPDATE trades 
+                 SET status = 'committed', 
+                     committed_at = NOW(),
+                     escrow_start_date = NOW(),
+                     escrow_end_date = NOW() + INTERVAL '30 days'
+                 WHERE id = $1 AND status = 'matched'"
+            )
+            .bind(trade_id)
+            .execute(mm.pool())
+            .await
+            .map_err(|e: sqlx::Error| Error::Database(e.to_string()))?;
+            
+            // Immediately move to escrow status
+            sqlx::query(
+                "UPDATE trades 
+                 SET status = 'escrow'
+                 WHERE id = $1 AND status = 'committed'"
+            )
+            .bind(trade_id)
+            .execute(mm.pool())
+            .await
+            .map_err(|e: sqlx::Error| Error::Database(e.to_string()))?;
         }
         
         Ok(())

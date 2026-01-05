@@ -77,19 +77,19 @@ export default function CommitmentFlow({ tradeId, onSuccess, onError }: Commitme
     }
     
     try {
+      // Require wallet connection before creating the pending transaction so we don't leave orphaned rows
+      if (!isConnected) {
+        setError('Please connect your wallet first');
+        setStep('ready');
+        return;
+      }
+      
       setStep('pending_wallet');
       setError(null);
       
       // Create pending transaction record with dynamically calculated fee
       const pending = await tradeApi.createPendingCommitment(tradeId, feeMojos, walletAddress || undefined);
       setPendingTx(pending);
-      
-      // Check if wallet is connected
-      if (!isConnected) {
-        setError('Please connect your wallet first');
-        setStep('ready');
-        return;
-      }
       
       setStep('signing');
       
